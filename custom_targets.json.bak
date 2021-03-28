@@ -1,0 +1,41 @@
+{
+    "PYBOARD_F405": {
+        "inherits": ["MCU_STM32"],
+        "core": "Cortex-M4",
+        "extra_labels_add": ["STM32F4", "STM32F405xx", "STM32F405RG", "STM32F4xx", "STM32F405xG"],
+        "config": {
+            "clock_source": {
+                "help": "Mask value : USE_PLL_HSE_EXTC (need HW patch) | USE_PLL_HSE_XTAL (need HW patch) | USE_PLL_HSI | USE_PLL_MSI",
+                "value": "USE_PLL_MSI",
+                "macro_name": "CLOCK_SOURCE"
+            },
+            "lpticker_lptim": {
+                "help": "This target supports LPTIM. Set value 1 to use LPTIM for LPTICKER, or 0 to use RTC wakeup timer",
+                "value": 1
+            }
+        },
+        "macros_add" :[
+            "STM32F4",
+            "STM32F4xx",
+            "STM32F405",
+            "STM32F405xG",
+            "STM"
+        ],
+        "overrides": { "lpticker_delay_ticks": 4 },
+        "device_name": "STM32F405RG",
+        "device_has" : [
+            "MPU",
+            "I2C",
+            "PWMOUT",
+            "ANALOGIN",
+            "ANALOGOUT",
+            "SPI",
+            "SERIAL",
+            "SERIAL_FC",
+            "SERIAL_ASYNCH",
+            "STDIO_MESSAGES",
+            "INTERRUPTIN"
+        ], 
+        "bootloader_supported": true
+    }
+}
