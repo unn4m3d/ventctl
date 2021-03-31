@@ -7,33 +7,8 @@
 #include <PT1000.hpp>
 #include <cstring>
 #include <cstdlib>
-
-#define VC_ASSERT(cond, text) ETL_ASSERT(cond, etl::exception(text, __FILE__, __LINE__))
-
-// A hack
-namespace std
-{
-    std::from_chars_result from_chars(const char* b, const char* e, float& v)
-    {
-        std::from_chars_result result;
-
-        constexpr std::size_t buf_size = 64;
-        VC_ASSERT(e > b, "Invalid string");
-        VC_ASSERT((e - b) < buf_size, "String is too long");
-        char buffer[buf_size] = {0};
-        char* end;
-        std::memcpy(buffer, b, (e - b));
-        v = std::strtof(buffer, &end);
-
-        if(end == buffer) result.ec = std::errc::invalid_argument;
-
-        if(errno == ERANGE) result.ec = std::errc::result_out_of_range;
-
-        result.ptr = b + (end - buffer);
-
-        return result;
-    }
-}
+#include <charconv.hpp>
+#include <Peripheral.hpp>
 
 using Serial = mbed::Serial;
 namespace ventctl
@@ -42,7 +17,7 @@ namespace ventctl
     {
     public:
 
-        bool matchCmd(etl::string_view& v, char* cmd)
+        bool match_cmd(etl::string_view& v, char* cmd)
         {
             if(v.starts_with(cmd))
             {
@@ -54,76 +29,71 @@ namespace ventctl
             
         }
 
-        template<typename T> T parseArg(etl::string_view& v)
-        {
-            auto first = v.begin();
-            auto last = v.end();
-
-            T value;
-
-            std::from_chars_result result = std::from_chars(first, last, value);
-
-            VC_ASSERT(result.ec == std::errc(), ETL_ERROR_TEXT("Cannot parse number", "parse error"));
-
-            v.remove_prefix(result.ptr - first);
-
-            return value;
-        }
-
-
-        void parseCmd()
+        void parse_cmd()
         {
             etl::string_view view(m_cmdbuf);
+            etl::exception exc("None", __FILE__, __LINE__);
 
-            if(matchCmd(view, "set "))
+            if(match_cmd(view, "set "))
             {
-                //auto pos = view.find(' ');
-                //view.remove_prefix(pos);
-                volatile auto idx = parseArg<uint16_t>(view);
-                VC_ASSERT(idx < m_outputs.size(), ETL_ERROR_TEXT("Out of range", "1O"));
-                volatile auto value = parseArg<uint16_t>(view);
-                *m_outputs[idx] = value != 0;
-                
-            }
-            #if defined(VC_F407VG)
-                else if(matchCmd(view, "anal "))
+                VC_TRY
                 {
-                    volatile auto idx = parseArg<uint16_t>(view);
-                    VC_ASSERT(idx < m_analog.size(), ETL_ERROR_TEXT("Out of range", "1O"));
-                    volatile auto value = parseArg<float>(view);
-                    *m_analog[idx] = value;
+                    auto number = parse_arg<int>(view, &exc);
+                    if(exc.what() != "None") break;
+                    if(number >= PeripheralBase::get_peripherals().size())
+                    {
+                        VC_THROW("Incorrect index");
+                    }
+
+                    auto output = PeripheralBase::get_peripherals().at(number);
+
+                    bool result = false;
+
+                    if(output->accepts_type<float>())
+                    {
+                        auto value = parse_arg<float>(view, &exc);
+                        if(exc.what() != "None") break;
+                        result = output->set_value(&value);
+                    }
+                    else if(output->accepts_type<int>())
+                    {
+                        auto value = parse_arg<int>(view, &exc);
+                        if(exc.what() != "None") break;
+                        result = output->set_value(&value);
+                    }
+                    else if(output->accepts_type<bool>())
+                    {
+                        auto value = parse_arg<bool>(view, &exc);
+                        if(exc.what() != "None") break;
+                        result = output->set_value(&value);
+                    }
+                    else
+                    {
+                        printf("Warning: couldn't determine value type\n");
+                    }
+
+                    if(!result)
+                        printf("Couldn't set output\n");
                 }
-            #endif
-            else if(matchCmd(view, "temp"))
-            {
-                auto flt = m_thermo->read();
-                auto res = ventctl::pt1000_resistance(flt*3.3);
-                auto temp = ventctl::pt1000_temp(res);
-                //m_serial << "Raw: " << m_thermo->read_u16() << "\nFloat: " << flt << "\nVoltage: " << flt*3.3 << "\n"; 
-                printf("Raw: %hu\nFloat: %1.4f\nVoltage:%1.2f\nResistance: %1.2f\nTemp: %1.2f\n",
-                    m_thermo->read_u16(),
-                    flt,
-                    flt*3.3,
-                    res,
-                    temp    
-                );
-                //m_serial << "Resistance: " << res << "\nTemperature: " << temp << "\n"; 
+                VC_CATCH(exc)
+                {
+                    printf("Exception : %s at %s:%d\n", exc.what(), exc.file_name(), exc.line_number());
+                }
             }
-            else if(matchCmd(view, "v"))
+            else if(match_cmd(view, "v"))
             {
                 printf("ventctl v 0.0.1\n");
             }
-            else if(matchCmd(view, "state"))
+            else if(match_cmd(view, "state"))
             {
-                printf("Digital Outputs:\n");
-                for(int i = 0; i < m_outputs.size(); i++)
-                    printf("[%d] = %d\n", i, (int)m_outputs[i]->read() );
-
-                #if defined(VC_F407VG)
-                    printf("Analog Outputs:\n");
-                    for(int i = 0; i < m_analog.size(); i++)
-                        printf("[%d] = %1.2f\n", i, m_analog[i]->read());
-                #endif
+                int counter = 0;
+                for(auto& periph : PeripheralBase::get_peripherals())
+                {
+                    printf("[%2d] ", counter);
+                    periph->print(stdout);
+                    printf("\n");
+                    counter++;
+                }
             }
             else
             {
@@ -131,16 +101,13 @@ namespace ventctl
             }
         }
 
-        Term(Serial& s, etl::ivector<DigitalOut*>& o, etl::ivector<AnalogOut*>& ao, AnalogIn* input) :
+        Term(Serial& s) :
             m_idx(0),
             m_cmdbuf{0},
-            m_serial(s), 
-            m_thermo(input),
-            m_analog(ao),
-            m_outputs(o)
+            m_serial(s)
             {}
 
-        void tryCommand()
+        void try_command()
         {
             if(m_serial.readable())
             {
@@ -152,18 +119,7 @@ namespace ventctl
                 if(ch == '\n')
                 {
                     m_cmdbuf[m_idx] = 0;
-                    try
-                    {
-                        parseCmd();
-                    }
-                    catch(const etl::exception& e)
-                    {
-                        printf("Exc %s at %s:%d\n", e.what(), e.file_name(), e.line_number());
-                    }
-                    catch(...)
-                    {
-                        printf("Lol I am fucking leaving\n");
-                    }
+                    parse_cmd();
                     m_idx = 0;
 
                 }
@@ -177,9 +133,6 @@ namespace ventctl
         }
 
     private:
-        etl::ivector<DigitalOut*>& m_outputs;
-        AnalogIn* m_thermo;
-        etl::ivector<AnalogOut*>& m_analog;
         Serial& m_serial;
         char m_cmdbuf[256];
         uint8_t m_idx;

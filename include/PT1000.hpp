@@ -6,7 +6,7 @@ namespace ventctl
 {
     inline float pt1000_resistance(float voltage)
     {
-        return voltage*(-250) + 1000;
+        return voltage*(-250) + 1500;
     }
 
     constexpr float pt1000_correction[] = {1.51892983e-15, -2.85842067e-12, -5.34227299e-09,
