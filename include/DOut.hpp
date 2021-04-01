@@ -13,6 +13,12 @@ namespace ventctl
         virtual bool accept_value(bool&);
         virtual void print(file_t);
         virtual bool read_value();
+
+        DOut& operator=(bool b)
+        {
+            accept_value(b);
+            return *this;
+        }
     
     private:
         DigitalOut m_out;

@@ -78,6 +78,17 @@ namespace ventctl
 
         virtual bool accept_value(T& t) = 0;
         virtual T read_value() = 0;
+
+        operator T()
+        {
+            return read_value();
+        }
+
+        Peripheral<T>& operator=(T& t)
+        {
+            accept_value(t);
+            return *this;
+        }
     };
 
     extern template class Peripheral<float>;
