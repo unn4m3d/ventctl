@@ -16,8 +16,16 @@ namespace ventctl
 
         float read_raw();
         float read_voltage();
+        
+        static float read_voltage(float raw);
+
         float read_resistance();
+
+        static float read_resistance(float voltage);
+
         float read_temperature();
+
+        static float read_temperature(float resistance);
 
         virtual void print(file_t file);
 
