@@ -34,5 +34,5 @@ float ventctl::ThermalSensor::read_temperature()
 void ventctl::ThermalSensor::print(ventctl::file_t file)
 {
     Peripheral<float>::print(file);
-    fprintf(file, "= %1.2f C (%1.2f, %1.2f V, %1.2f Ohm)", read_temperature(), read_raw(), read_voltage(), read_resistance());
+    fprintf(file, "= %1.4f C (%1.4f, %1.4f V, %1.2f Ohm)", read_temperature(), read_raw(), read_voltage(), read_resistance());
 }
