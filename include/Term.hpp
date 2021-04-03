@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <charconv.hpp>
 #include <Peripheral.hpp>
+#include <ventctl.hpp>
 
 using Serial = mbed::Serial;
 namespace ventctl
@@ -82,7 +83,7 @@ namespace ventctl
             }
             else if(match_cmd(view, "v"))
             {
-                printf("ventctl v 0.0.1\n");
+                printf("ventctl v%s\n", VC_VERSION);
             }
             else if(match_cmd(view, "state"))
             {
