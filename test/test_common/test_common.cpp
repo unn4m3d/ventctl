@@ -1,4 +1,5 @@
 #include <Peripheral.hpp>
+#include <PT1000.hpp>
 #include <unity.h>
 
 etl::vector<ventctl::PeripheralBase*, VC_PERIPH_CAP> ventctl::PeripheralBase::m_peripherals(0);
@@ -39,10 +40,24 @@ void test_periph_set_value()
     TEST_ASSERT_EQUAL(v, 13.37);
 }
 
+void test_pt1000_conversion_pos()
+{
+    TEST_ASSERT_FLOAT_WITHIN(0.1, 0.0, ventctl::pt1000_temp(1000.0));
+    TEST_ASSERT_FLOAT_WITHIN(0.1, 22.0, ventctl::pt1000_temp(1085.7));
+    TEST_ASSERT_FLOAT_WITHIN(0.1, 100.0, ventctl::pt1000_temp(1385.1));
+}
+
+void test_pt1000_conversion_neg()
+{
+    TEST_ASSERT_FLOAT_WITHIN(0.5, -41.0, ventctl::pt1000_temp(838.7));
+}
+
 int main()
 {
     UNITY_BEGIN();
     RUN_TEST(test_periph_accepts_type);
     RUN_TEST(test_periph_set_value);
+    RUN_TEST(test_pt1000_conversion_pos);
+    RUN_TEST(test_pt1000_conversion_neg);
     UNITY_END();
 }
