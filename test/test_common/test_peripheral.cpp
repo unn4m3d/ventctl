@@ -1,6 +1,8 @@
 #include <Peripheral.hpp>
 #include <unity.h>
 
+etl::vector<ventctl::PeripheralBase*, VC_PERIPH_CAP> ventctl::PeripheralBase::m_peripherals(0);
+
 class DummyPeripheral : public ventctl::Peripheral<float>
 {
 public:
