@@ -17,7 +17,11 @@ namespace ventctl
     class PeripheralBase
     {
     public: 
-        PeripheralBase(const char* name);
+        PeripheralBase(const char* name):
+            m_name(name)
+        {
+            register_peripheral(this);
+        }
 
         virtual void print(file_t file);
 
@@ -69,7 +73,9 @@ namespace ventctl
     class Peripheral : public PeripheralBase
     {
     public:
-        Peripheral(const char* name);
+        Peripheral(const char* name) :
+            PeripheralBase(name)
+        {}
 
         virtual bool accepts_type_id(type_id_t type_id);
 

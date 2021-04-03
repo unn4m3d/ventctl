@@ -6,6 +6,7 @@
 #include <Term.hpp>
 #include <etl/vector.h>
 #include <cmath>
+#include <Peripheral.hpp>
 #include <AOut.hpp>
 #include <DOut.hpp>
 #include <ThermalSensor.hpp>
@@ -18,6 +19,8 @@
     
     AnalogOut a1(PA_4), a2(PA_5);
 */
+
+etl::vector<ventctl::PeripheralBase*, VC_PERIPH_CAP> ventctl::PeripheralBase::m_peripherals(0);
 
 ventctl::DOut 
     cooler1("Cooler_1", PD_0),

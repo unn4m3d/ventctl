@@ -1,14 +1,6 @@
 #include <Peripheral.hpp>
 #include <cxxabi.h>
 
-
-
-ventctl::PeripheralBase::PeripheralBase(const char* name) :
-    m_name(name)
-{
-    register_peripheral(this);
-}
-
 void ventctl::PeripheralBase::print(ventctl::file_t file)
 {
 
@@ -21,11 +13,6 @@ void ventctl::PeripheralBase::print(ventctl::file_t file)
         fprintf(file, "[%s] %s", name, m_name);
 
 }
-
-template<typename T>
-ventctl::Peripheral<T>::Peripheral(const char* name) :
-    PeripheralBase(name)
-{}
 
 template<typename T>
 bool ventctl::Peripheral<T>::set_value(void* v , ventctl::type_id_t id)
@@ -58,6 +45,3 @@ namespace ventctl
     template class Peripheral<bool>;
     template class Peripheral<int>;
 }
-
-
-etl::vector<ventctl::PeripheralBase*, VC_PERIPH_CAP> ventctl::PeripheralBase::m_peripherals(0);
