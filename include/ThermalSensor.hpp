@@ -1,5 +1,6 @@
 #pragma once
 #include <Peripheral.hpp>
+#include <mbed.h>
 
 namespace ventctl
 {

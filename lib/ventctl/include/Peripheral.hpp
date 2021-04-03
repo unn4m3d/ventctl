@@ -1,6 +1,5 @@
 #pragma once
 
-#include <mbed.h>
 #include <etl/vector.h>
 #include <cstdio>
 #include <loophole.hpp>
