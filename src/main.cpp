@@ -45,8 +45,6 @@ ventctl::Variable<bool>
 Serial pc(PA_9, PA_10); 
 ventctl::Term term(pc);
 
-
-
 FileHandle *mbed::mbed_override_console(int fd)
 {
     return &pc;
@@ -62,8 +60,6 @@ void error_handler(const etl::exception& e)
 int main()
 {
     etl::error_handler::set_callback<error_handler>();
-
-    printf("Man dude\n");
 
     aux = true;
     motor1 = 0.5;
