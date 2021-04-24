@@ -22,7 +22,7 @@ namespace ventctl
             register_peripheral(this);
         }
 
-        virtual void print(file_t file);
+        virtual void print(file_t file, bool short_info = false);
 
         virtual bool accepts_type_id(int type_id) = 0;
         

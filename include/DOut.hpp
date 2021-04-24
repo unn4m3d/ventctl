@@ -11,7 +11,7 @@ namespace ventctl
         DOut(const char* name, PinName pin);
 
         virtual bool accept_value(bool&);
-        virtual void print(file_t);
+        virtual void print(file_t, bool s = false);
         virtual bool read_value();
 
         DOut& operator=(bool b)

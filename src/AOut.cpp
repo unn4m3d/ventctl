@@ -11,10 +11,13 @@ bool ventctl::AOut::accept_value(float& value)
     return true;
 }
 
-void ventctl::AOut::print(ventctl::file_t file)
+void ventctl::AOut::print(ventctl::file_t file, bool s)
 {
-    Peripheral<float>::print(file);
-    fprintf(file, "= %1.2f (%1.2fV)", read_value(), read_value() * 10.0);
+    Peripheral<float>::print(file, s);
+    if(s)
+        fprintf(file, "=%1.2f", read_value());
+    else
+        fprintf(file, "= %1.2f (%1.2fV)", read_value(), read_value() * 10.0);
 }
 
 float ventctl::AOut::read_value()

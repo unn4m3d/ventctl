@@ -46,12 +46,15 @@ float ventctl::ThermalSensor::read_temperature(float resistance)
     return ventctl::pt1000_temp(resistance);
 }
 
-void ventctl::ThermalSensor::print(ventctl::file_t file)
+void ventctl::ThermalSensor::print(ventctl::file_t file, bool s)
 {
     Peripheral<float>::print(file);
     float raw = read_raw();
     float voltage = read_voltage(raw);
     float res = read_resistance(voltage);
     float temp = read_temperature(res);
-    fprintf(file, "= %1.4f C (%1.4f, %1.4f V, %1.2f Ohm)", temp, raw, voltage, res);
+    if(s)
+        fprintf(file, "=%1.1f", temp);
+    else
+        fprintf(file, "= %1.4f C (%1.4f, %1.4f V, %1.2f Ohm)", temp, raw, voltage, res);
 }

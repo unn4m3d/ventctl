@@ -12,6 +12,8 @@
 #include <ThermalSensor.hpp>
 #include <Variable.hpp>
 #include <time.hpp>
+#include <EthernetInterface.h>
+#include <stm32xx_emac.h>
 
 /*    DigitalOut o1(PE_8), o2(PE_9), o3(PD_1), o4(PE_12);
     DigitalOut heater(PD_0), fan(PE_13), aux(PE_10);  
@@ -20,20 +22,22 @@
     AnalogOut a1(PA_4), a2(PA_5);
 */
 
+EthernetInterface net;
+
 etl::vector<ventctl::PeripheralBase*, VC_PERIPH_CAP> ventctl::PeripheralBase::m_peripherals(0);
 
 ventctl::DOut 
-    cooler1("Cooler_1", PD_0),
-    cooler2("Cooler_2", PE_13),
-    aux("Auxiliary", PE_10),
-    heater("Heater", PD_1);
+    cooler1("C_1", PD_0),
+    cooler2("C_2", PE_13),
+    aux("Aux", PE_10),
+    heater("H", PD_1);
 
 ventctl::AOut
-    motor1("Motor_1", PA_4),
-    motor2("Motor_2", PA_5);
+    motor1("M_1", PA_4),
+    motor2("M_2", PA_5);
 
 ventctl::ThermalSensor
-    temp1("Temp_1", PC_2);
+    temp1("T_1", PC_2);
 
 ventctl::Variable<float>
     k_p("Kp", 0.5);
@@ -55,6 +59,16 @@ void error_handler(const etl::exception& e)
     printf("Exc %s at %s:%d\n", e.what(), e.file_name(), e.line_number());
 }
 
+void do_log()
+{
+    for(auto periph : ventctl::PeripheralBase::get_peripherals())
+    {
+        periph->print(stdout, true);
+        printf(";");
+    }
+    printf("\n");
+}
+
 
 
 int main()
@@ -67,6 +81,58 @@ int main()
 
     const float temp_setting = 30.0;
     float last_time = ventctl::time();
+
+    // Bring up the ethernet interface
+    printf("Ethernet socket example\n");
+    net.set_default_parameters();
+
+
+    uint32_t phy_sr;
+    STM32_EMAC& emac = STM32_EMAC::get_instance();
+    
+    printf("Ptr: %8x\n", &emac);
+
+    auto error = net.connect();
+    printf("Error: %d\n", error);
+
+    HAL_StatusTypeDef s = HAL_ETH_ReadPHYRegister(&emac.EthHandle, PHY_BSR, &phy_sr);
+
+    printf("Status : %d, sr: %08x\n", (int)s, phy_sr);
+
+    uint32_t phy_idr1, phy_idr2;
+    s = HAL_ETH_ReadPHYRegister(&emac.EthHandle, 2, &phy_idr1);
+    printf("Status : %d, idr1: %08x\n", (int)s, phy_idr1);
+    s = HAL_ETH_ReadPHYRegister(&emac.EthHandle, 3, &phy_idr2);
+    printf("Status : %d, idr2: %08x\n", (int)s, phy_idr2);
+
+    // Show the network address
+    SocketAddress a;
+    net.get_ip_address(&a);
+    printf("IP address: %s\n", a.get_ip_address() ? a.get_ip_address() : "None");
+
+    // Open a socket on the network interface, and create a TCP connection to mbed.org
+    TCPSocket socket;
+    socket.open(&net);
+
+    net.gethostbyname("ifconfig.io", &a);
+    a.set_port(80);
+    socket.connect(a);
+    // Send a simple http request
+    char sbuffer[] = "GET / HTTP/1.1\r\nHost: ifconfig.io\r\n\r\n";
+    int scount = socket.send(sbuffer, sizeof sbuffer);
+    printf("sent %d [%.*s]\n", scount, strstr(sbuffer, "\r\n") - sbuffer, sbuffer);
+
+    // Recieve a simple http response and print out the response line
+    char rbuffer[64];
+    int rcount = socket.recv(rbuffer, sizeof rbuffer);
+    printf("recv %d [%.*s]\n", rcount, strstr(rbuffer, "\r\n") - rbuffer, rbuffer);
+
+    // Close the socket to return its memory and bring down the network interface
+    socket.close();
+
+    // Bring down the ethernet interface
+    net.disconnect();
+    printf("Done\n");
 
     while(1)
     {
@@ -89,8 +155,7 @@ int main()
 
             if(log_state)
             {
-                temp1.print(stdout);
-                printf("\n");
+                do_log();
             }
         }
 

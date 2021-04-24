@@ -27,7 +27,7 @@ namespace ventctl
 
         static float read_temperature(float resistance);
 
-        virtual void print(file_t file);
+        virtual void print(file_t file, bool s = false);
 
     private:
         AnalogIn m_input;

@@ -12,7 +12,7 @@ namespace ventctl
         AOut(const char* name, PinName pin);
 
         virtual bool accept_value(float&);
-        virtual void print(file_t);
+        virtual void print(file_t, bool sh = false);
         virtual float read_value();
 
         AOut& operator=(float b)

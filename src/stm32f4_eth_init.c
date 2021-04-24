@@ -3,6 +3,8 @@
 /**
  * Override HAL Eth Init function
  */
+
+
 void HAL_ETH_MspInit(ETH_HandleTypeDef *heth)
 {
     GPIO_InitTypeDef GPIO_InitStructure;

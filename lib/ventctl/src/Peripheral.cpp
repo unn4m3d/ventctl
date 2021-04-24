@@ -1,7 +1,7 @@
 #include <Peripheral.hpp>
 #include <cxxabi.h>
 
-void ventctl::PeripheralBase::print(ventctl::file_t file)
+void ventctl::PeripheralBase::print(ventctl::file_t file, bool s)
 {
 
         int status;
@@ -10,7 +10,10 @@ void ventctl::PeripheralBase::print(ventctl::file_t file)
 
         if(status) name = ti.name();
 
-        fprintf(file, "[%s] %s", name, m_name);
+        if(s)
+            fprintf(file, "%s", m_name);
+        else
+            fprintf(file, "[%s] %s", name, m_name);
 
 }
 

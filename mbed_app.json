@@ -5,8 +5,11 @@
             "platform.minimal-printf-enable-floating-point": true,
             "platform.minimal-printf-set-floating-point-max-decimals": 6,
             "platform.minimal-printf-enable-64-bit": true,
-            "target.device_has_add" : ["EMAC"],
-            "target.network-default-interface-type" : "ETHERNET"
+            "target.device_has_add" : ["EMAC", "ETHERNET"],
+            "target.network-default-interface-type" : "ETHERNET",
+            "nsapi.default-stack": "LWIP",
+            "target.features_add" : ["IPV4", "LWIP"],
+            "target.features_remove" : ["NANOSTACK"]
         }
     }
 }
