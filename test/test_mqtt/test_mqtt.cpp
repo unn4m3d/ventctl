@@ -1,4 +1,5 @@
 #include <mqtt/types.hpp>
+#include <mqtt/serializer.hpp>
 #include <unity.h>
 
 
@@ -101,7 +102,7 @@ void test_mqtt_connect_parsing()
 
     TEST_ASSERT(mqtt::Serializer<decltype(fhdr)>::read(s, fhdr));
     TEST_ASSERT(mqtt::Serializer<decltype(vhdr)>::read(s, vhdr));
-    TEST_ASSERT(mqtt::Serializer<decltype(payload)>::read(s, payload));
+    TEST_ASSERT(mqtt::Payload<mqtt::MessageType::CONNECT>::read(s, payload, fhdr, vhdr));
 
     TEST_ASSERT_EQUAL(fhdr.type_and_flags, 0x10);
     TEST_ASSERT(vhdr.proto_name == "MQTT");
@@ -110,6 +111,8 @@ void test_mqtt_connect_parsing()
     TEST_ASSERT_EQUAL(vhdr.properties.properties[0].value.get<uint32_t>(), 10);
     TEST_ASSERT(payload.will_topic =="bugurt");
     TEST_ASSERT(payload.username == "sych");
+
+    std::cout << sizeof(mqtt::Payload<mqtt::MessageType::CONNECT>) << std::endl;
 }
 
 int main()
