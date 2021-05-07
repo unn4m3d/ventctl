@@ -86,53 +86,24 @@ int main()
     printf("Ethernet socket example\n");
     net.set_default_parameters();
 
-
-    uint32_t phy_sr;
-    STM32_EMAC& emac = STM32_EMAC::get_instance();
-    
-    printf("Ptr: %8x\n", &emac);
-
     auto error = net.connect();
     printf("Error: %d\n", error);
 
-    HAL_StatusTypeDef s = HAL_ETH_ReadPHYRegister(&emac.EthHandle, PHY_BSR, &phy_sr);
-
-    printf("Status : %d, sr: %08x\n", (int)s, phy_sr);
-
-    uint32_t phy_idr1, phy_idr2;
-    s = HAL_ETH_ReadPHYRegister(&emac.EthHandle, 2, &phy_idr1);
-    printf("Status : %d, idr1: %08x\n", (int)s, phy_idr1);
-    s = HAL_ETH_ReadPHYRegister(&emac.EthHandle, 3, &phy_idr2);
-    printf("Status : %d, idr2: %08x\n", (int)s, phy_idr2);
-
-    // Show the network address
-    SocketAddress a;
-    net.get_ip_address(&a);
-    printf("IP address: %s\n", a.get_ip_address() ? a.get_ip_address() : "None");
-
     // Open a socket on the network interface, and create a TCP connection to mbed.org
-    TCPSocket socket;
+    SocketAddress a;
+    TLSSocket socket;
     socket.open(&net);
 
-    net.gethostbyname("ifconfig.io", &a);
-    a.set_port(80);
+    net.gethostbyname("mqtt.googleapis.com", &a);
+    a.set_port(8883);
     socket.connect(a);
-    // Send a simple http request
-    char sbuffer[] = "GET / HTTP/1.1\r\nHost: ifconfig.io\r\n\r\n";
-    int scount = socket.send(sbuffer, sizeof sbuffer);
-    printf("sent %d [%.*s]\n", scount, strstr(sbuffer, "\r\n") - sbuffer, sbuffer);
-
-    // Recieve a simple http response and print out the response line
-    char rbuffer[64];
-    int rcount = socket.recv(rbuffer, sizeof rbuffer);
-    printf("recv %d [%.*s]\n", rcount, strstr(rbuffer, "\r\n") - rbuffer, rbuffer);
 
     // Close the socket to return its memory and bring down the network interface
     socket.close();
 
     // Bring down the ethernet interface
-    net.disconnect();
-    printf("Done\n");
+
+
 
     while(1)
     {
@@ -161,4 +132,5 @@ int main()
 
         term.try_command();
     }
+    net.disconnect();
 }

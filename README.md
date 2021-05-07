@@ -1,12 +1,13 @@
 ventctl
 ==
 
-При развертывании проекта с гитхаба после установки mbed необходимо поправить `framework-mbed/features/netsocket/emac-drivers/TARGET_STM/stm32xx_emac.cpp`, заменить на строчке 46: 
+При развертывании проекта с гитхаба после установки mbed необходимо поправить `framework-mbed/features/netsocket/emac-drivers/TARGET_STM/stm32xx_emac.cpp`, заменить на строчке 46:
+
 ```cpp
     #define ETH_ARCH_PHY_ADDRESS    (0x00)
 ```
 
-на 
+на
 
 ```cpp
     #ifndef ETH_ARCH_PHY_ADDRESS
@@ -15,7 +16,8 @@ ventctl
 ```
 
 P.S.
-==
+--
+
 - Да?
 - Алё!
 - Да да?

@@ -25,14 +25,12 @@ public:
     {
         if(time <= m_time) 
         {
-            printf("Fuck you leatherman\n");
             return NAN;
         }
         for(; m_time <= time; m_time += m_step)
         {
             
             m_result = m_ctl.nextValue(callback(m_time, m_result), m_time);
-            printf("%1.2f = %1.2f\n", m_time, m_result);
         }
 
         return m_result;

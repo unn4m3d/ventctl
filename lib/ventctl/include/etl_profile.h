@@ -13,6 +13,9 @@
 #define ETL_TARGET_OS_FREERTOS // Placeholder. Not currently utilised in the ETL
 #define ETL_TARGET_DEVICE_ARM  // Placeholder. Not currently utilised in the ETL
 
+#define ETL_DISABLE_STRING_TRUNCATION_CHECKS 
+#define ETL_DISABLE_STRING_CLEAR_AFTER_USE
+
 
 
 #define VC_EXC(text) etl::exception(text, __FILE__, __LINE__)
