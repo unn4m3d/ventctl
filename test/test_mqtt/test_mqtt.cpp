@@ -4,7 +4,7 @@
 
 void test_mqtt_variable_int_size()
 {
-    using vi_t = mqtt::VariableLengthInteger<uint32_t>;
+    using vi_t = mqtt::VariableByteInteger;
 
     vi_t a(0x36), b(0xFF), c(268435450);
 
