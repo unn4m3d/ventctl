@@ -151,7 +151,7 @@ namespace mqtt
                         uint16_t len = 0;
                         if(!read(s, len)) return false;
 
-                        if(len > MQTT_MAX_BINARY_DATA_LENGTH) len = MQTT_MAX_BINARY_DATA_LENGTH;
+                        auto actual_len = len > MQTT_MAX_BINARY_DATA_LENGTH ? MQTT_MAX_BINARY_DATA_LENGTH : len;
 
                         typename Property::binary_type vec(len, 0);
                         for(uint16_t i = 0; i < len; i++)
@@ -163,6 +163,8 @@ namespace mqtt
 
                         p.value = vec;
                         byte_count += len + 2;
+
+                        if(actual_len < len) s.seek(len - actual_len, SEEK_CUR);
                     }
                         break;
 
@@ -200,6 +202,12 @@ namespace mqtt
 
             return true;
         }
+        
+        template<typename T1, typename T2>
+        bool read(Stream& s, std::pair<T1, T2>& value)
+        {
+            return read(s, value.first) && read(s, value.second);
+        }
 
         template<typename T, std::enable_if_t<std::is_class<T>::value, int> = 0>
         bool write(Stream& s, T& value);
@@ -217,6 +225,12 @@ namespace mqtt
             auto result =  s.write(buf, size) == size;
 
             return result;
+        }
+
+        template<typename T1, typename T2>
+        bool write(Stream& s, std::pair<T1, T2>& value)
+        {
+            return write(s, value.first) && write(s, value.second);
         }
 
         template<typename T, size_t N>
@@ -341,4 +355,28 @@ namespace mqtt
             return Serializer<T>::write(s, value);
         }
     }
+
+    template<MessageType Type>
+    struct Message
+    {
+        FixedHeader fixed_header;
+        VariableHeader<Type> variable_header;
+        Payload<Type> payload;
+
+        bool read(Stream& s)
+        {
+            return 
+                Serializer<FixedHeader>::read(s, fixed_header) &&
+                Serializer<VariableHeader<Type>>::read(s, variable_header, &fixed_header) &&
+                Payload<Type>::read(s, payload, fixed_header, variable_header);
+        }
+
+        bool write(Stream& s)
+        {
+            return 
+                Serializer<FixedHeader>::write(s, fixed_header) &&
+                Serializer<VariableHeader<Type>>::write(s, variable_header) &&
+                Serializer<Payload<Type>>::write(s, payload);
+        }
+    };
 }

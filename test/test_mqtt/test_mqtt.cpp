@@ -17,38 +17,34 @@ void test_mqtt_variable_int_size()
 
 void test_mqtt_connect_generation()
 {
-    mqtt::FixedHeader fhdr;
-    mqtt::VariableHeader<mqtt::MessageType::CONNECT> vhdr;
-    mqtt::Payload<mqtt::MessageType::CONNECT> payload;
+    mqtt::Message<mqtt::MessageType::CONNECT> message;
 
-    fhdr.type_and_flags = (uint8_t)mqtt::MessageType::CONNECT << 4;
+    message.fixed_header.type_and_flags = (uint8_t)mqtt::MessageType::CONNECT << 4;
 
-    vhdr.proto_name.assign("MQTT");
-    vhdr.proto_version = 5;
-    vhdr.flags = 0b11001110;
-    vhdr.keep_alive_timer = 16;
-    vhdr.properties.properties.push_back(mqtt::Property{
+    message.variable_header.proto_name.assign("MQTT");
+    message.variable_header.proto_version = 5;
+    message.variable_header.flags = 0b11001110;
+    message.variable_header.keep_alive_timer = 16;
+    message.variable_header.properties.properties.push_back(mqtt::Property{
         .type = 17,
         .value = (uint32_t)10
     });
 
-    payload.client_id = "le_batya";
-    payload.username = "sych";
-    payload.password = "yoba";
-    payload.will_properties.properties.push_back(mqtt::Property{
+    message.payload.client_id = "le_batya";
+    message.payload.username = "sych";
+    message.payload.password = "yoba";
+    message.payload.will_properties.properties.push_back(mqtt::Property{
         .type = 24,
         .value = (uint32_t)10
     });
-    payload.will_topic.assign("bugurt");
-    payload.will_payload = "";
+    message.payload.will_topic.assign("bugurt");
+    message.payload.will_payload = "";
 
-    fhdr.length = vhdr.length() + payload.length();
+    message.fixed_header.length = message.variable_header.length() + message.payload.length();
 
     Stream s;
 
-    mqtt::Serializer<decltype(fhdr)>::write(s, fhdr);
-    mqtt::Serializer<decltype(vhdr)>::write(s, vhdr);
-    mqtt::Serializer<decltype(payload)>::write(s, payload);
+    message.write(s);
     std::string str = s.get_buf();
 
     unsigned char check[] = {
@@ -111,8 +107,6 @@ void test_mqtt_connect_parsing()
     TEST_ASSERT_EQUAL(vhdr.properties.properties[0].value.get<uint32_t>(), 10);
     TEST_ASSERT(payload.will_topic =="bugurt");
     TEST_ASSERT(payload.username == "sych");
-
-    std::cout << sizeof(mqtt::Payload<mqtt::MessageType::CONNECT>) << std::endl;
 }
 
 int main()

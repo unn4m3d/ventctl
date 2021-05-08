@@ -235,8 +235,216 @@ namespace mqtt
         }
     };
 
+    template<>
+    struct VariableHeader<MessageType::SUBSCRIBE>
+    {
+        uint16_t packet_id;
+        Properties<MQTT_MAX_SUBSCRIBE_PROPERTY_COUNT> properties;
+
+        size_t length()
+        {
+            return sizeof(packet_id) + properties.get_length();
+        }
+    };
+
+    template<>
+    struct Payload<MessageType::SUBSCRIBE>
+    {
+
+        using subscription_type = std::pair<etl::string<MQTT_MAX_TOPIC_NAME_LENGTH>, uint8_t>;
+
+        etl::vector<subscription_type, MQTT_MAX_SUBSCRIBE_TOPIC_COUNT> subscriptions;
+
+        static bool read(Stream& s, Payload<MessageType::SUBSCRIBE>& payload, FixedHeader& fhdr, VariableHeader<MessageType::SUBSCRIBE>& vhdr);
+
+        bool write(Stream& s);
+
+        size_t length()
+        {
+            size_t l = 0;
+
+            for(subscription_type& sub : subscriptions)
+            {
+                l += sizeof(subscription_type::second_type) + sub.first.length() + 2;
+            } 
+
+            return l;
+        }
+    };
+
+    template<>
+    struct VariableHeader<MessageType::SUBACK>
+    {
+        uint16_t packet_id;
+        Properties<MQTT_MAX_SUBSCRIBE_PROPERTY_COUNT> properties;
+
+        size_t length()
+        {
+            return sizeof(packet_id) + properties.get_length();
+        }
+    };
+
+    enum class SubAckReasonCode
+    {
+        QOS_0 = 0x00,
+        QOS_1 = 0x01,
+        QOS_2 = 0x02,
+        UNSPECIFIED = 0x80,
+        IMPL_SPECIFIC_ERROR = 0x83,
+        NOT_AUTHORIZED = 0x87,
+        TOPIC_FILTER_INVALID = 0x8F,
+        PACKET_ID_IN_USE = 0x91,
+        QUOTA_EXCEEDED = 0x97,
+        SHARED_SUBS_NOT_SUPPORTED = 0xA1,
+        WILDCARD_SUBS_NOT_SUPPORTED = 0xA2
+    };
+
+    template<>
+    struct Payload<MessageType::SUBACK>
+    {
+        etl::vector<SubAckReasonCode, MQTT_MAX_SUBSCRIBE_TOPIC_COUNT> reasons;
+
+        size_t length()
+        {
+            return reasons.size();
+        }
+
+        static bool read(Stream& s, Payload<MessageType::SUBACK>& payload, FixedHeader& fhdr, VariableHeader<MessageType::SUBACK>& vhdr);
+
+        bool write(Stream& s);
+    };
+
+    template<>
+    struct VariableHeader<MessageType::UNSUBSCRIBE>
+    {
+        uint16_t packet_id;
+        Properties<MQTT_MAX_SUBSCRIBE_PROPERTY_COUNT> properties;
+
+        size_t length()
+        {
+            return sizeof(packet_id) + properties.get_length();
+        }
+    };
+
+    template<>
+    struct Payload<MessageType::UNSUBSCRIBE>
+    {
+        etl::vector<etl::string<MQTT_MAX_TOPIC_NAME_LENGTH>, MQTT_MAX_SUBSCRIBE_TOPIC_COUNT> topics;
+
+        size_t length()
+        {
+            size_t len = 0;
+            for(auto& str : topics)
+            {
+                len += str.length() + 2;
+            }
+        }
+
+        static bool read(Stream& s, Payload<MessageType::UNSUBSCRIBE>& payload, FixedHeader& fhdr, VariableHeader<MessageType::UNSUBSCRIBE>& vhdr);
+
+        bool write(Stream& s);
+    };
+
+    template<>
+    struct VariableHeader<MessageType::UNSUBACK>
+    {
+        uint16_t packet_id;
+        Properties<MQTT_MAX_SUBSCRIBE_PROPERTY_COUNT> properties;
+
+        size_t length()
+        {
+            return sizeof(packet_id) + properties.get_length();
+        }
+    };
+
+    enum class UnSubAckReasonCode
+    {
+        SUCCESS = 0x00,
+        NO_SUB_EXISTED = 0x11,
+        UNSPECIFIED = 0x80,
+        IMPL_SPECIFIC_ERROR = 0x83,
+        NOT_AUTHORIZED = 0x87,
+        TOPIC_FILTER_INVALID = 0x8F,
+        PACKET_ID_IN_USE = 0x91
+    };
+
+    template<>
+    struct Payload<MessageType::UNSUBACK>
+    {
+        etl::vector<UnSubAckReasonCode, MQTT_MAX_SUBSCRIBE_TOPIC_COUNT> reasons;
+
+        size_t length()
+        {
+            return reasons.size();
+        }
+
+        static bool read(Stream& s, Payload<MessageType::UNSUBACK>& payload, FixedHeader& fhdr, VariableHeader<MessageType::UNSUBACK>& vhdr);
+
+        bool write(Stream& s);
+    };
+
+    enum class DisconnectReasonCode
+    {
+        NORMAL = 0x00,
+        WITH_WILL = 0x04,
+        UNSPECIFIED = 0x80,
+        MALFORMED_PACKET = 0x81,
+        PROTOCOL_ERROR = 0x82,
+        IMPL_SPECIFIC_ERROR = 0x83,
+        NOT_AUTHORIZED = 0x87,
+        SERVER_BUSY = 0x89,
+        SERVER_SHUTTING_DOWN = 0x8B,
+        KEEP_ALIVE_TIMEOUT = 0x8D,
+        SESSION_TAKEN_OVER = 0x8E,
+        TOPIC_FILTER_INVALID = 0x8F,
+        TOPIC_NAME_INVALID = 0x90,
+        RECEIVE_MAXIMUM_EXCEEDED = 0x93,
+        TOPIC_ALIAS_INVALID = 0x94,
+        PACKET_TOO_LARGE = 0x95,
+        MESSAGE_RATE_TOO_HIGH = 0x96,
+        QUOTA_EXCEEDED = 0x97,
+        ADMINISTRATIVE_ACTION = 0x98,
+        PAYLOAD_FORMAT_INVALID = 0x99,
+        RETAIN_NOT_SUPPORTED = 0x9A,
+        QOS_NOT_SUPPORTED = 0x9B,
+        USE_ANOTHER_SERVER = 0x9C,
+        SERVER_MOVED = 0x9D,
+        SHARED_SUBS_NOT_SUPPORTED = 0x9E,
+        CONNECTION_RATE_EXCEEDED = 0x9F,
+        MAX_CONNECT_TIME = 0xA0,
+        SUB_IDS_NOT_SUPPORTED = 0xA1,
+        WILDCARD_SUBS_NOT_SUPPORTED = 0xA2
+    };
+
+    template<>
+    struct VariableHeader<MessageType::DISCONNECT>
+    {
+        DisconnectReasonCode reason;
+        Properties<MQTT_MAX_DISCONNECT_PROPERTY_COUNT> properties;
+
+        size_t length()
+        {
+            return properties.get_length() + 1;
+        }
+    };
+    
+    enum class AuthReasonCode
+    {
+        SUCCESS = 0,
+        CONTINUE = 0x18,
+        REAUTHENTICATE = 0x19
+    };
 
 
+    template<>
+    struct VariableHeader<MessageType::AUTH>
+    {
+        AuthReasonCode reason;
+        Properties<MQTT_MAX_AUTH_PROPERTY_COUNT> properties;
 
-
+        size_t length()
+        {
+            return properties.get_length() + 1;
+        }
+    };
 }
