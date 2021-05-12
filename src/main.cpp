@@ -43,7 +43,8 @@ ventctl::Variable<float>
     k_p("Kp", 0.5);
 
 ventctl::Variable<bool>
-    log_state("Log", false);
+    log_state("Log", false),
+    manual_override("Manual", false);
     
 
 Serial pc(PA_9, PA_10); 

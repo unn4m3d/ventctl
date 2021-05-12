@@ -2,6 +2,8 @@
 #include <unity.h>
 #include <functional>
 #include <cstdio>
+#include <iostream>
+#include <Aperiodic.hpp>
 
 ventctl::PIDController<float, float>
     pid_ol(1.5, 1.5, 0.5),
@@ -76,10 +78,29 @@ void test_pid_closed_loop()
     TEST_ASSERT_FLOAT_WITHIN(0.01, 3.0, result_9);
 }
 
+void test_aperiodic_step_response()
+{
+    ventctl::Aperiodic w(1, 1);
+
+    float result[5] = {0};
+
+    for(int i = 1; i < 500; i++)
+    {
+        auto r = w.nextValue(1.0, i * 0.01);
+        if(i % 100 == 0) result[i/100] = r;
+        std::cout << "Value: " << r << std::endl;
+    }
+
+    TEST_ASSERT_FLOAT_WITHIN(0.1, 0, result[0]);
+    TEST_ASSERT_FLOAT_WITHIN(0.01, 0.634, result[1]);
+    TEST_ASSERT_FLOAT_WITHIN(0.1, 1, result[4]);
+}
+
 int main()
 {
     UNITY_BEGIN();
     RUN_TEST(test_pid_open_loop);
     RUN_TEST(test_pid_closed_loop);
+    RUN_TEST(test_aperiodic_step_response);
     UNITY_END();
 }

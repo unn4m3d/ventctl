@@ -88,25 +88,60 @@ void test_mqtt_connect_parsing()
 
     check[1] = sizeof(check) - 2;
 
-    mqtt::FixedHeader fhdr;
-    mqtt::VariableHeader<mqtt::MessageType::CONNECT> vhdr;
-    mqtt::Payload<mqtt::MessageType::CONNECT> payload;
+    mqtt::Message<mqtt::MessageType::CONNECT> msg;
 
     Stream s;
     s.write((char*)check, sizeof(check));
     s.rewind();
 
-    TEST_ASSERT(mqtt::Serializer<decltype(fhdr)>::read(s, fhdr));
-    TEST_ASSERT(mqtt::Serializer<decltype(vhdr)>::read(s, vhdr));
-    TEST_ASSERT(mqtt::Payload<mqtt::MessageType::CONNECT>::read(s, payload, fhdr, vhdr));
+    TEST_ASSERT(msg.read(s));
 
-    TEST_ASSERT_EQUAL(fhdr.type_and_flags, 0x10);
-    TEST_ASSERT(vhdr.proto_name == "MQTT");
-    TEST_ASSERT_EQUAL(vhdr.proto_version, 5);
-    TEST_ASSERT_EQUAL(vhdr.keep_alive_timer, 16);
-    TEST_ASSERT_EQUAL(vhdr.properties.properties[0].value.get<uint32_t>(), 10);
-    TEST_ASSERT(payload.will_topic =="bugurt");
-    TEST_ASSERT(payload.username == "sych");
+    TEST_ASSERT_EQUAL(msg.fixed_header.type_and_flags, 0x10);
+    TEST_ASSERT(msg.variable_header.proto_name == "MQTT");
+    TEST_ASSERT_EQUAL(msg.variable_header.proto_version, 5);
+    TEST_ASSERT_EQUAL(msg.variable_header.keep_alive_timer, 16);
+    TEST_ASSERT_EQUAL(msg.variable_header.properties.properties[0].value.get<uint32_t>(), 10);
+    TEST_ASSERT(msg.payload.will_topic =="bugurt");
+    TEST_ASSERT(msg.payload.username == "sych");
+}
+
+void test_mqtt_qos_only_field_parsing()
+{
+    char check_no_qos[] = {
+        0x30,
+        0,
+        0, 5, 't', 'o', 'p', 'i', 'c',
+        0
+    };
+
+    check_no_qos[1] = sizeof(check_no_qos) - 2;
+
+    Stream s;
+    s.write(check_no_qos, sizeof(check_no_qos));
+    s.rewind();
+
+    mqtt::Message<mqtt::MessageType::PUBLISH> msg;
+
+    TEST_ASSERT(msg.read(s));
+
+    TEST_ASSERT_EQUAL(msg.variable_header.packet_id, 0);
+
+    char check_qos[] = {
+        0x32,
+        0,
+        0, 5, 't', 'o', 'p', 'i', 'c',
+        0x12, 0x34,
+        0
+    };
+
+    check_qos[1] = sizeof(check_qos) - 2;
+
+    Stream s2;
+    s.write(check_qos, sizeof(check_qos));
+
+    //TEST_ASSERT(msg.read(s));
+    //TEST_ASSERT_EQUAL(msg.variable_header.packet_id, 0x1234);
+    //TEST_ASSERT(msg.variable_header.topic == "topic");
 }
 
 int main()
@@ -115,5 +150,6 @@ int main()
     RUN_TEST(test_mqtt_variable_int_size);
     RUN_TEST(test_mqtt_connect_generation);
     RUN_TEST(test_mqtt_connect_parsing);
+    RUN_TEST(test_mqtt_qos_only_field_parsing);
     UNITY_END();
 }

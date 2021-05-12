@@ -204,7 +204,7 @@ namespace mqtt
         }
         
         template<typename T1, typename T2>
-        bool read(Stream& s, std::pair<T1, T2>& value)
+        bool read(Stream& s, std::pair<T1, T2>& value, FixedHeader* fhdr = nullptr)
         {
             return read(s, value.first) && read(s, value.second);
         }
@@ -320,8 +320,9 @@ namespace mqtt
             auto& luple = reinterpret_cast<type_list&>(hdr);
 
             bool status = true;
-            luple_do(luple, [&status, &s](auto& value){
-                status = status && detail::read(s, value);
+            luple_do(luple, [&status, &s, &fhdr](auto& value){
+                status = status && detail::read(s, value, fhdr);
+                std::cout << "Read " << typeid(value).name() << " : " << status << std::endl; 
             });
 
             return status;
@@ -365,18 +366,18 @@ namespace mqtt
 
         bool read(Stream& s)
         {
-            return 
-                Serializer<FixedHeader>::read(s, fixed_header) &&
-                Serializer<VariableHeader<Type>>::read(s, variable_header, &fixed_header) &&
-                Payload<Type>::read(s, payload, fixed_header, variable_header);
+            if(!Serializer<FixedHeader>::read(s, fixed_header)) return false;
+            if(!Serializer<VariableHeader<Type>>::read(s, variable_header, &fixed_header)) return false;
+            if(!Payload<Type>::read(s, payload, fixed_header, variable_header)) return false;
+            return true;
         }
 
         bool write(Stream& s)
         {
-            return 
-                Serializer<FixedHeader>::write(s, fixed_header) &&
-                Serializer<VariableHeader<Type>>::write(s, variable_header) &&
-                Serializer<Payload<Type>>::write(s, payload);
+            if(!Serializer<FixedHeader>::write(s, fixed_header)) return false;
+            if(!Serializer<VariableHeader<Type>>::write(s, variable_header)) return false;
+            if(!Serializer<Payload<Type>>::write(s, payload)) return false;
+            return true;
         }
     };
 }
