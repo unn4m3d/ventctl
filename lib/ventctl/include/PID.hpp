@@ -19,7 +19,7 @@ namespace ventctl
             m_k_p(kp),
             m_k_i(ki),
             m_k_d(kd),
-            m_k_b(TC(0)),
+            m_k_b(kb),
             m_last_time(0),
             m_error(0),
             m_saturate(true),

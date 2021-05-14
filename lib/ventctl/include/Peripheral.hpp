@@ -60,6 +60,11 @@ namespace ventctl
             return m_peripherals;
         }
 
+        ~PeripheralBase()
+        {
+            etl::erase(m_peripherals, this);
+        }
+
     private:
         const char* m_name;
 
@@ -90,6 +95,12 @@ namespace ventctl
         }
 
         Peripheral<T>& operator=(T& t)
+        {
+            accept_value(t);
+            return *this;
+        }
+
+        Peripheral<T>& operator=(T t)
         {
             accept_value(t);
             return *this;
