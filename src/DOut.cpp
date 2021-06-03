@@ -13,7 +13,7 @@ bool ventctl::DOut::accept_value(bool& value)
 
 void ventctl::DOut::print(ventctl::file_t file, bool s)
 {
-    Peripheral<bool>::print(file);
+    Peripheral<bool>::print(file, s);
     if(s)
         fprintf(file, "=%d", m_out.read());
     else

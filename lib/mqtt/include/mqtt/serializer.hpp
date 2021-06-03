@@ -17,7 +17,7 @@ namespace mqtt
         template<typename T, std::enable_if_t<std::is_class<T>::value, int> = 0>
         bool read(Stream& s, T& value, FixedHeader* fhdr = nullptr);
 
-        template<typename T, std::enable_if_t<std::is_integral<T>::value, int> = 0>
+        template<typename T, std::enable_if_t<std::is_integral<T>::value || std::is_enum<T>::value, int> = 0>
         bool read(Stream& s, T& value, FixedHeader* fhdr = nullptr)
         {
             auto size = sizeof(T);
@@ -212,7 +212,7 @@ namespace mqtt
         template<typename T, std::enable_if_t<std::is_class<T>::value, int> = 0>
         bool write(Stream& s, T& value);
 
-        template<typename T, std::enable_if_t<std::is_integral<T>::value, char> = 0>
+        template<typename T, std::enable_if_t<std::is_integral<T>::value || std::is_enum<T>::value, char> = 0>
         bool write(Stream& s, T value)
         {
             auto size = sizeof(T);
@@ -322,7 +322,7 @@ namespace mqtt
             bool status = true;
             luple_do(luple, [&status, &s, &fhdr](auto& value){
                 status = status && detail::read(s, value, fhdr);
-                std::cout << "Read " << typeid(value).name() << " : " << status << std::endl; 
+                //std::cout << "Read " << typeid(value).name() << " : " << status << std::endl; 
             });
 
             return status;
@@ -330,7 +330,6 @@ namespace mqtt
 
         static bool write(Stream& s, T& value)
         {
-            static_assert(std::is_aggregate<T>::value, "T is not aggregate");
             auto& luple = reinterpret_cast<type_list&>(value);
 
             bool status = true;
@@ -367,6 +366,13 @@ namespace mqtt
         bool read(Stream& s)
         {
             if(!Serializer<FixedHeader>::read(s, fixed_header)) return false;
+            if(!Serializer<VariableHeader<Type>>::read(s, variable_header, &fixed_header)) return false;
+            if(!Payload<Type>::read(s, payload, fixed_header, variable_header)) return false;
+            return true;
+        }
+
+        bool read_without_fixed_header(Stream& s)
+        {
             if(!Serializer<VariableHeader<Type>>::read(s, variable_header, &fixed_header)) return false;
             if(!Payload<Type>::read(s, payload, fixed_header, variable_header)) return false;
             return true;

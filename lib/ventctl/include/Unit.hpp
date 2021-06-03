@@ -29,11 +29,13 @@ namespace ventctl
 
             return m_last;
         }
+
+        float getLast()
+        {
+            return m_last;
+        }
     private:
         float m_last, m_last_time;
-
-    protected:
-        float getLast() { return m_last;}
     
     };
 

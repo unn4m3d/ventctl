@@ -338,6 +338,8 @@ namespace mqtt
             {
                 len += str.length() + 2;
             }
+
+            return len;
         }
 
         static bool read(Stream& s, Payload<MessageType::UNSUBSCRIBE>& payload, FixedHeader& fhdr, VariableHeader<MessageType::UNSUBSCRIBE>& vhdr);

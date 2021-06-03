@@ -48,7 +48,7 @@ float ventctl::ThermalSensor::read_temperature(float resistance)
 
 void ventctl::ThermalSensor::print(ventctl::file_t file, bool s)
 {
-    Peripheral<float>::print(file);
+    Peripheral<float>::print(file, s);
     float raw = read_raw();
     float voltage = read_voltage(raw);
     float res = read_resistance(voltage);

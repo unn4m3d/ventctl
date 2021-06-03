@@ -9,7 +9,10 @@
             "target.network-default-interface-type" : "ETHERNET",
             "nsapi.default-stack": "LWIP",
             "target.features_add" : ["IPV4", "LWIP"],
-            "target.features_remove" : ["NANOSTACK"]
+            "target.features_remove" : ["NANOSTACK"],
+            "platform.crash-capture-enabled" : true,
+            "target.thread-stack-size" : 8192,
+            "target.main-thread-stack-size" : 8192
         }
     }
 }

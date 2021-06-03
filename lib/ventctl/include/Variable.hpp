@@ -76,9 +76,9 @@ namespace ventctl
             return m_value;
         }
 
-        virtual void print(file_t file)
+        virtual void print(file_t file, bool s = false)
         {
-            Peripheral<T>::print(file);
+            Peripheral<T>::print(file, s);
             VariablePrinter<T>::print(file, m_value);
         }
 

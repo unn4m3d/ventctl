@@ -5,7 +5,7 @@
 #include <loophole.hpp>
 
 #ifndef VC_PERIPH_CAP
-    #define VC_PERIPH_CAP 16
+    #define VC_PERIPH_CAP 64
 #endif
 
 namespace ventctl

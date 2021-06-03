@@ -17,6 +17,9 @@
 #include <PID.hpp>
 #include <Unit.hpp>
 #include <Saturation.hpp>
+#include <mqtt/Client.hpp>
+#include <ulog.hpp>
+#include <stm32f4xx_hal_adc.h>
 
 
 /*
@@ -78,14 +81,13 @@ void do_log()
 ventctl::DOut 
     cooler1("C_1", PD_0);
 
-etl::vector<ventctl::DOut, 6> heater = {
-    ventctl::DOut("H_0", PE_8),
-    ventctl::DOut("H_1", PE_9),
-    ventctl::DOut("H_2", PE_10),
-    ventctl::DOut("H_3", PE_11),
-    ventctl::DOut("H_4", PE_12),
-    ventctl::DOut("H_5", PE_13)
-};
+ventctl::DOut
+    heater0 ("H_0", PE_8),
+    heater1("H_1", PE_9),
+    heater2("H_2", PE_10),
+    heater3("H_3", PE_11),
+    heater4("H_4", PE_12),
+    heater5("H_5", PE_13);
 
 ventctl::AOut
     motor1("M_1", PA_4),
@@ -96,8 +98,8 @@ ventctl::AIn
     sensor2("P_2", PB_1);
 
 ventctl::ThermalSensor
-    temp_room("T_Room", PC_2),
-    temp_iflow("T_IFlow", PC_3),
+    temp_room("T_Room", PC_3),
+    temp_iflow("T_IFlow", PC_2),
     temp_coolant("T_C", PA_0),
     temp_oflow("T_OFlow", PA_3);
 
@@ -115,11 +117,19 @@ ventctl::Variable<bool>
 Serial pc(PA_9, PA_10); 
 ventctl::Term term(pc);
 
-ventctl::PIDController<float, float>
+/*ventctl::PIDController<float, float>
     pid_room_temp(2, 0.5, 0.5, 0, 50, 1),
     pid_intake_temp(0.1, 0.0001, 0.1, -1, 1, 1),
     pid_correction(0.1, 0.01, 0.01, 0, 3, 0),
     pid_intake_flow(0.1, 0.5, 0.5, 0, 1, 1),
+    pid_deicer(1,1,0,0,2,1),
+    pid_exhaust_flow(0.1, 1, 0, 0, 1, 1);*/
+
+ventctl::PIDController<float, float>
+    pid_room_temp(2, 0.5, 0, 0, 50, 1),
+    pid_intake_temp(0.1, 0.0001, 0, -1, 1, 1),
+    pid_correction(0.1, 0.01, 0, 0, 3, 0),
+    pid_intake_flow(0.1, 0.5, 0, 0, 1, 1),
     pid_deicer(1,1,0,0,2,1),
     pid_exhaust_flow(0.1, 1, 0, 0, 1, 1);
 
@@ -153,7 +163,7 @@ ventctl::Unit<ventctl::Saturation>
 ventctl::Sum
     iflow_temp_error({{iflow_temp_limit, false}, {src_iflow_temp, true}});
 
-ventctl::Unit<ventctl::PIDController<float,float>>
+ventctl::Unit<ventctl::PIDController<float, float>>
     iflow_temp_ctl(pid_intake_temp, iflow_temp_error);
 
 ventctl::Saturation
@@ -169,18 +179,16 @@ ventctl::Unit<ventctl::Saturation>
 
 etl::vector<ventctl::PeriphRef<bool>, 1> cooler = {cooler1};
 etl::vector<ventctl::PeriphRef<bool>, 6> heater_ref = {
-    heater[0],
-    heater[1],
-    heater[2],
-    heater[3],
-    heater[4],
-    heater[5]
-};
+    heater0,
+    heater1,
+    heater2,
+    heater3,
+    heater4,
+    heater5};
 
 ventctl::SteppedOutputSink
     heater_power_sink(heater_power_limit, heater_ref, false),
     cooler_power_sink(cooler_power_limit, cooler, false);
-
 
 
 FileHandle *mbed::mbed_override_console(int fd)
@@ -188,16 +196,103 @@ FileHandle *mbed::mbed_override_console(int fd)
     return &pc;
 }
 
+const char* ca_cert = "-----BEGIN CERTIFICATE-----\n"
+"MIIGEzCCA/ugAwIBAgIQfVtRJrR2uhHbdBYLvFMNpzANBgkqhkiG9w0BAQwFADCB\n"
+"iDELMAkGA1UEBhMCVVMxEzARBgNVBAgTCk5ldyBKZXJzZXkxFDASBgNVBAcTC0pl\n"
+"cnNleSBDaXR5MR4wHAYDVQQKExVUaGUgVVNFUlRSVVNUIE5ldHdvcmsxLjAsBgNV\n"
+"BAMTJVVTRVJUcnVzdCBSU0EgQ2VydGlmaWNhdGlvbiBBdXRob3JpdHkwHhcNMTgx\n"
+"MTAyMDAwMDAwWhcNMzAxMjMxMjM1OTU5WjCBjzELMAkGA1UEBhMCR0IxGzAZBgNV\n"
+"BAgTEkdyZWF0ZXIgTWFuY2hlc3RlcjEQMA4GA1UEBxMHU2FsZm9yZDEYMBYGA1UE\n"
+"ChMPU2VjdGlnbyBMaW1pdGVkMTcwNQYDVQQDEy5TZWN0aWdvIFJTQSBEb21haW4g\n"
+"VmFsaWRhdGlvbiBTZWN1cmUgU2VydmVyIENBMIIBIjANBgkqhkiG9w0BAQEFAAOC\n"
+"AQ8AMIIBCgKCAQEA1nMz1tc8INAA0hdFuNY+B6I/x0HuMjDJsGz99J/LEpgPLT+N\n"
+"TQEMgg8Xf2Iu6bhIefsWg06t1zIlk7cHv7lQP6lMw0Aq6Tn/2YHKHxYyQdqAJrkj\n"
+"eocgHuP/IJo8lURvh3UGkEC0MpMWCRAIIz7S3YcPb11RFGoKacVPAXJpz9OTTG0E\n"
+"oKMbgn6xmrntxZ7FN3ifmgg0+1YuWMQJDgZkW7w33PGfKGioVrCSo1yfu4iYCBsk\n"
+"Haswha6vsC6eep3BwEIc4gLw6uBK0u+QDrTBQBbwb4VCSmT3pDCg/r8uoydajotY\n"
+"uK3DGReEY+1vVv2Dy2A0xHS+5p3b4eTlygxfFQIDAQABo4IBbjCCAWowHwYDVR0j\n"
+"BBgwFoAUU3m/WqorSs9UgOHYm8Cd8rIDZsswHQYDVR0OBBYEFI2MXsRUrYrhd+mb\n"
+"+ZsF4bgBjWHhMA4GA1UdDwEB/wQEAwIBhjASBgNVHRMBAf8ECDAGAQH/AgEAMB0G\n"
+"A1UdJQQWMBQGCCsGAQUFBwMBBggrBgEFBQcDAjAbBgNVHSAEFDASMAYGBFUdIAAw\n"
+"CAYGZ4EMAQIBMFAGA1UdHwRJMEcwRaBDoEGGP2h0dHA6Ly9jcmwudXNlcnRydXN0\n"
+"LmNvbS9VU0VSVHJ1c3RSU0FDZXJ0aWZpY2F0aW9uQXV0aG9yaXR5LmNybDB2Bggr\n"
+"BgEFBQcBAQRqMGgwPwYIKwYBBQUHMAKGM2h0dHA6Ly9jcnQudXNlcnRydXN0LmNv\n"
+"bS9VU0VSVHJ1c3RSU0FBZGRUcnVzdENBLmNydDAlBggrBgEFBQcwAYYZaHR0cDov\n"
+"L29jc3AudXNlcnRydXN0LmNvbTANBgkqhkiG9w0BAQwFAAOCAgEAMr9hvQ5Iw0/H\n"
+"ukdN+Jx4GQHcEx2Ab/zDcLRSmjEzmldS+zGea6TvVKqJjUAXaPgREHzSyrHxVYbH\n"
+"7rM2kYb2OVG/Rr8PoLq0935JxCo2F57kaDl6r5ROVm+yezu/Coa9zcV3HAO4OLGi\n"
+"H19+24rcRki2aArPsrW04jTkZ6k4Zgle0rj8nSg6F0AnwnJOKf0hPHzPE/uWLMUx\n"
+"RP0T7dWbqWlod3zu4f+k+TY4CFM5ooQ0nBnzvg6s1SQ36yOoeNDT5++SR2RiOSLv\n"
+"xvcRviKFxmZEJCaOEDKNyJOuB56DPi/Z+fVGjmO+wea03KbNIaiGCpXZLoUmGv38\n"
+"sbZXQm2V0TP2ORQGgkE49Y9Y3IBbpNV9lXj9p5v//cWoaasm56ekBYdbqbe4oyAL\n"
+"l6lFhd2zi+WJN44pDfwGF/Y4QA5C5BIG+3vzxhFoYt/jmPQT2BVPi7Fp2RBgvGQq\n"
+"6jG35LWjOhSbJuMLe/0CjraZwTiXWTb2qHSihrZe68Zk6s+go/lunrotEbaGmAhY\n"
+"LcmsJWTyXnW0OMGuf1pGg+pRyrbxmRE1a6Vqe8YAsOf4vmSyrcjC8azjUeqkk+B5\n"
+"yOGBQMkKW+ESPMFgKuOXwIlCypTPRpgSabuY0MLTDXJLR27lk8QyKGOHQ+SwMj4K\n"
+"00u/I5sUKUErmgQfky3xxzlIPK1aEn8=\n"
+"-----END CERTIFICATE-----";
+
+
+EthernetInterface eth;
+
+AnalogIn vref(ADC_VREF);
 
 int main()
 {
+    printf("Nigga\n");
+
+    auto cb = ulog::callback_t([](ulog::log_level l , ulog::string_t s){
+        printf("[%d] %s\n", (int)l, s );
+    });
+
+    ulog::set_callback(cb);
+
+    
+
+     printf("3637\n");
+
+    auto err = eth.connect();
+
+    printf("7369 %d\n", (int)err);
+    TLSSocket socket;
+    mqtt::Client client(&socket);
+
+    printf("ебет...\n");
+
+    err = socket.open(&eth);
+
+    printf("тебя %d\n", (int)err);
+    err = socket.set_root_ca_cert(ca_cert);
+
+    printf("!!!! %d\n", (int)err);
+
+    SocketAddress addr;
+    err = eth.gethostbyname("api-demo.wolkabout.com", &addr);
+
+    printf("fuck %d\n", (int)err);
+    addr.set_port(8883);
+    socket.connect(addr);
+
+    printf("Hello man\n");
+
+    client.connect_async("man","dude");
+    
+    while(!client.connected());
+
+    printf("Err code : %d\n", (int)client.status());
+
     etl::error_handler::set_callback<error_handler>();
 
     motor1 = 0.5;
     motor2 = 0.5;
 
 
-
+    ADC1->SMPR1 = 0333333333;
+    ADC1->SMPR2 = 03333333333;
+    ADC2->SMPR1 = 0333333333;
+    ADC2->SMPR2 = 03333333333;
+    ADC3->SMPR1 = 0333333333;
+    ADC3->SMPR2 = 03333333333;
 
     while(1)
     {
@@ -206,5 +301,13 @@ int main()
             heater_power_sink.update(ventctl::time());
             cooler_power_sink.update(ventctl::time());
         }
+
+        if(log_state)
+        {
+            printf("T = %.2f (%.4fV), H = %.3f, C = %.1f, Ref = %.4fV\n", temp_room.read_temperature(), temp_room.read_voltage(), heater_power_limit.getLast(), cooler_power_limit.getLast(), vref.read() * 3.3);
+            wait_ms(200);
+        }
+
+        term.try_command();
     }
 }

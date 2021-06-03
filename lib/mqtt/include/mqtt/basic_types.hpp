@@ -2,6 +2,9 @@
 
 #include <stdint.h>
 #include <utility>
+#if defined(CAPACITY)
+    #undef CAPACITY
+#endif
 #include <etl/string.h>
 #include <etl/vector.h>
 #include <etl/variant.h>
