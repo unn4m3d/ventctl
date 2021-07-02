@@ -135,12 +135,7 @@ namespace mqtt
             {
                 len += will_properties.get_length() + will_topic.length() + will_payload.length() + 4;
             }
-            #else
-            if(!will_topic.empty() || !will_payload.empty())
-            {
-                len += will_topic.length() + will_payload.length() + 4;
-            }
-            #endif
+            
 
             if(!username.empty())
             {
