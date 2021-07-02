@@ -92,12 +92,12 @@ namespace mqtt
     template<MessageType Type>
     struct Payload
     {
-        static bool read(Stream& s, Payload<Type>& payload, FixedHeader& fhdr, VariableHeader<Type>& vhdr)
+        static bool read(Socket& s, Payload<Type>& payload, FixedHeader& fhdr, VariableHeader<Type>& vhdr)
         {
             return true;
         }
 
-        bool write(Stream& s)
+        bool write(Socket& s)
         {
             return true;
         }
@@ -118,18 +118,25 @@ namespace mqtt
         etl::string<MQTT_MAX_USERNAME_LENGTH> username;
         etl::string<MQTT_MAX_PASSWORD_LENGTH> password;
 
-        static bool read(Stream& s, Payload<MessageType::CONNECT>& payload, FixedHeader& fhdr, VariableHeader<MessageType::CONNECT>& vhdr);
+        static bool read(Socket& s, Payload<MessageType::CONNECT>& payload, FixedHeader& fhdr, VariableHeader<MessageType::CONNECT>& vhdr);
 
-        bool write(Stream& s);
+        bool write(Socket& s);
 
         size_t length()
         {
             size_t len = 0;
             len += client_id.length() + 2;
+            #if MQTT_VERSION >= 5
             if(will_properties.properties.size() > 0 || !will_topic.empty() || !will_payload.empty())
             {
                 len += will_properties.get_length() + will_topic.length() + will_payload.length() + 4;
             }
+            #else
+            if(!will_topic.empty() || !will_payload.empty())
+            {
+                len += will_topic.length() + will_payload.length() + 4;
+            }
+            #endif
 
             if(!username.empty())
             {
@@ -150,9 +157,9 @@ namespace mqtt
     {
         etl::vector<uint8_t, MQTT_MAX_PUBLISH_PAYLOAD_LENGTH> payload;
 
-        static bool read(Stream& s, Payload<MessageType::PUBLISH>& payload, FixedHeader& fhdr, VariableHeader<MessageType::PUBLISH>& vhdr);
+        static bool read(Socket& s, Payload<MessageType::PUBLISH>& payload, FixedHeader& fhdr, VariableHeader<MessageType::PUBLISH>& vhdr);
 
-        bool write(Stream& s);
+        bool write(Socket& s);
 
         size_t length()
         {
@@ -255,9 +262,9 @@ namespace mqtt
 
         etl::vector<subscription_type, MQTT_MAX_SUBSCRIBE_TOPIC_COUNT> subscriptions;
 
-        static bool read(Stream& s, Payload<MessageType::SUBSCRIBE>& payload, FixedHeader& fhdr, VariableHeader<MessageType::SUBSCRIBE>& vhdr);
+        static bool read(Socket& s, Payload<MessageType::SUBSCRIBE>& payload, FixedHeader& fhdr, VariableHeader<MessageType::SUBSCRIBE>& vhdr);
 
-        bool write(Stream& s);
+        bool write(Socket& s);
 
         size_t length()
         {
@@ -309,9 +316,9 @@ namespace mqtt
             return reasons.size();
         }
 
-        static bool read(Stream& s, Payload<MessageType::SUBACK>& payload, FixedHeader& fhdr, VariableHeader<MessageType::SUBACK>& vhdr);
+        static bool read(Socket& s, Payload<MessageType::SUBACK>& payload, FixedHeader& fhdr, VariableHeader<MessageType::SUBACK>& vhdr);
 
-        bool write(Stream& s);
+        bool write(Socket& s);
     };
 
     template<>
@@ -342,9 +349,9 @@ namespace mqtt
             return len;
         }
 
-        static bool read(Stream& s, Payload<MessageType::UNSUBSCRIBE>& payload, FixedHeader& fhdr, VariableHeader<MessageType::UNSUBSCRIBE>& vhdr);
+        static bool read(Socket& s, Payload<MessageType::UNSUBSCRIBE>& payload, FixedHeader& fhdr, VariableHeader<MessageType::UNSUBSCRIBE>& vhdr);
 
-        bool write(Stream& s);
+        bool write(Socket& s);
     };
 
     template<>
@@ -380,9 +387,9 @@ namespace mqtt
             return reasons.size();
         }
 
-        static bool read(Stream& s, Payload<MessageType::UNSUBACK>& payload, FixedHeader& fhdr, VariableHeader<MessageType::UNSUBACK>& vhdr);
+        static bool read(Socket& s, Payload<MessageType::UNSUBACK>& payload, FixedHeader& fhdr, VariableHeader<MessageType::UNSUBACK>& vhdr);
 
-        bool write(Stream& s);
+        bool write(Socket& s);
     };
 
     enum class DisconnectReasonCode

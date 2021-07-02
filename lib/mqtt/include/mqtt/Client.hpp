@@ -35,16 +35,21 @@ namespace mqtt
         template<MessageType Type>
         using rx_cb_t = Callback<bool(Message<Type>&)>;
 
-        Client(socket_t* sock) : m_socket(sock), m_conn_status(ConnectReasonCode::UNSPECIFIED), m_stream(sock){}
+        Client(socket_t* sock) : m_socket(sock), m_conn_status(ConnectReasonCode::UNSPECIFIED){}
         
         template<mqtt::MessageType Type>
         bool send(mqtt::Message<Type>& msg)
         {
             m_mutex.lock();
             msg.fixed_header.length = msg.variable_header.length() + msg.payload.length();
-            auto result = msg.write(m_stream);
+            auto result = msg.write(*m_socket);
             m_mutex.unlock();
             return result;
+        }
+
+        Socket& getSocket()
+        {
+            return *m_socket;
         }
 
         bool connect_async(const Payload<MessageType::CONNECT>& payload); 
@@ -59,11 +64,6 @@ namespace mqtt
 
         void process();
 
-        Stream& get_stream()
-        {
-            return m_stream;
-        }
-
         bool connected()
         {
             return m_conn_status == ConnectReasonCode::SUCCESS;
@@ -77,7 +77,6 @@ namespace mqtt
 
     private:
         socket_t* m_socket;
-        SocketStream m_stream;
         mutex_t m_mutex;
         rx_cb_t<MessageType::PUBLISH> m_rx_cb;
         ConnectReasonCode m_conn_status;

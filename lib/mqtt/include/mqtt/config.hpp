@@ -64,6 +64,10 @@
     #define MQTT_VERSION 5
 #endif
 
+#ifndef MQTT_TIMEOUT
+    #define MQTT_TIMEOUT 3.0
+#endif
+
 #ifndef MQTT_MAX_WILL_PAYLOAD_LENGTH
     #define MQTT_MAX_WILL_PAYLOAD_LENGTH 16
 #endif

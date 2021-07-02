@@ -10,9 +10,8 @@ bool mqtt::detail::read(Socket&s, VariableByteInteger& value, FixedHeader*)
 
     do
     {
-        while(!s.readable());
-        
-        if(s.read(&data, 1) < 1) return false;
+
+        if(detail::read_raw(s, data, 1)) return false;
         inner_value |= (uint32_t)(data & 0x7F) << shift;
         shift += 7;
 
@@ -33,7 +32,7 @@ bool mqtt::detail::write(Socket &s, VariableByteInteger& value)
 
         if(len > 0) digit |= 0x80;
 
-        if(s.write((char*)&digit, 1) < 1) return false;
+        if(s.send((char*)&digit, 1) < 1) return false;
 
     } while(len > 0);
 

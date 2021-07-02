@@ -9,6 +9,8 @@
 #include <tuple>
 #include <cstring>
 #include <algorithm>
+#include <ulog.hpp>
+#include <util.hpp>
 
 namespace mqtt
 {
@@ -18,21 +20,21 @@ namespace mqtt
         template<typename T>
         inline bool read_raw(Socket& s, T& value, float timeout, bool flip = true)
         {
-            auto stop_time = mqtt::time() + timeout;
+            auto stop_time = util::time() + timeout;
 
             auto cnt = 0;
 
-            value = 0;
+            value = (T)0;
 
             while(cnt < sizeof(T))
             {
-                if(mqtt::time() > stop_time)
+                if(util::time() > stop_time)
                 {
                     ulog::warn("Timeout expired");
                     return false;
                 }
 
-                auto read = s.recv(&value, sizeof(T) - cnt);
+                auto read = s.recv(&value + cnt, sizeof(T) - cnt);
 
                 if(read < 0)
                 {
@@ -43,7 +45,20 @@ namespace mqtt
                 cnt += read;
             }
 
+            if(flip) std::reverse((char*)&value, (char*)&value + sizeof(T));
+
             return true;
+        }
+
+        inline void skip(Socket& s, size_t n)
+        {
+            while(n > 0)
+            {
+                char c;
+                auto x = s.recv(&c, 1);
+                if(x < 0) return;
+                n -= x;
+            }
         }
 
         template<typename T, std::enable_if_t<std::is_class<T>::value, int> = 0>
@@ -52,49 +67,50 @@ namespace mqtt
         template<typename T, std::enable_if_t<std::is_integral<T>::value || std::is_enum<T>::value, int> = 0>
         bool read(Socket& s, T& value, FixedHeader* fhdr = nullptr)
         {
-            auto size = sizeof(T);
-
-            char* buf = reinterpret_cast<char*>(&value);
-
-            while(!s.readable());
-
-            auto len = s.read(buf, size);
-            
-            if(len < size) return false;
-
-            std::reverse(buf, buf + size);
-
-            return true;
+            return read_raw(s, value, MQTT_TIMEOUT);
         }
 
         template<typename T, size_t N>
         bool read(Socket& s, T value[N], FixedHeader* fhdr = nullptr)
         {
-            while(!s.readable());
-            return s.read(value, N) == N;
+            for(size_t i = 0; i < N; ++i)
+            {
+                if(!read_raw(s, value[i], MQTT_TIMEOUT))
+                    return false;
+            }
+            return true;
         }
 
         template<size_t N>
         bool read(Socket& s, etl::string<N>& str, FixedHeader* fhdr = nullptr)
         {
-            while(!s.readable());
             uint16_t length;
-            if(!read(s, length)) return false;
+
+            if(!read_raw(s, length, MQTT_TIMEOUT)) return false;
 
             char buf[N];
 
             auto actual_length = length < N ? length : N;
             if(actual_length == 0) return true;
 
-            while(!s.readable());
+            for(size_t i = 0; i < actual_length; ++i)
+            {
+                if(!read_raw(s, buf[i], MQTT_TIMEOUT)) return false;
+            }
 
-            auto result = s.read(buf, actual_length);
+            
 
-            if(actual_length < length) s.seek(length - actual_length, SEEK_CUR);
+            str.assign(buf, actual_length);
 
-            str.assign(buf, result);
+            if(actual_length < length)
+            {
+                for(size_t i = 0; i < length - actual_length; ++i)
+                {
+                    if(!read_raw(s, buf[0], MQTT_TIMEOUT)) return false;
+                }
+            }
 
-            return result == actual_length;
+            return true;
         }
 
         bool read(Socket&s, VariableByteInteger& value, FixedHeader* fhdr = nullptr);
@@ -112,6 +128,7 @@ namespace mqtt
         template<size_t N>
         bool read(Socket& s, Properties<N>& prop, FixedHeader* fhdr = nullptr)
         {
+            #if MQTT_VERSION >= 5
             if(!read(s, prop.length)) return false;
 
             prop.properties.clear();
@@ -218,7 +235,7 @@ namespace mqtt
 
                 prop.properties.push_back(p);
             }
-
+            #endif
             return true;
         }
         
@@ -254,7 +271,7 @@ namespace mqtt
             std::memcpy(reinterpret_cast<void*>(buf), reinterpret_cast<void*>(&value), size);
             std::reverse(buf, buf + size);
 
-            auto result =  s.write(buf, size) == size;
+            auto result =  s.send(buf, size) == size;
 
             return result;
         }
@@ -268,7 +285,7 @@ namespace mqtt
         template<typename T, size_t N>
         bool write(Socket& s, T value[N])
         {
-            return s.write(value, N) == N;
+            return s.send(value, N * sizeof(T)) == N * sizeof(T);
         }
 
         template<size_t N>
@@ -276,7 +293,7 @@ namespace mqtt
         {
             if(!write(s, (uint16_t)str.length())) return false;
 
-            auto result = s.write(str.data(), str.size());
+            auto result = s.send(str.data(), str.size());
 
             return result == str.length();
         }
@@ -286,6 +303,7 @@ namespace mqtt
         template<size_t N>
         bool write(Socket& s, Properties<N>& p)
         {
+            #if MQTT_VERSION >= 5
             VariableByteInteger len(p.get_length() - 1);
 
             if(!write(s, len)) return false;
@@ -328,7 +346,7 @@ namespace mqtt
                     if(!write(s, sp.first) || !write(s, sp.second)) return false;
                 }
             }
-
+            #endif
             return true;
         }
 

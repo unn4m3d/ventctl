@@ -110,6 +110,7 @@ namespace mqtt
     template<size_t N>
     struct Properties
     {
+        #if MQTT_VERSION >= 5
         VariableByteInteger length;
         etl::vector<Property, N> properties;
 
@@ -141,5 +142,11 @@ namespace mqtt
             
             return len;
         }
+        #else
+        size_t get_length()
+        {
+            return 0;
+        }
+        #endif
     };
 }

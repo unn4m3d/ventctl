@@ -18,7 +18,7 @@ template<MessageType Type>
 Message<Type>& read_msg(Client* c, FixedHeader& hdr)
 {
     message<Type>.fixed_header = hdr;
-    if(!message<Type>.read_without_fixed_header(c->get_stream()))
+    if(!message<Type>.read_without_fixed_header(c->getSocket()))
         ulog::warn(ulog::join("Cannot read packet of type ", (int)Type));
     return message<Type>;
 }
@@ -61,7 +61,9 @@ namespace mqtt
                 message<MessageType::PUBACK>.fixed_header.type_and_flags = (uint8_t)MessageType::PUBACK << 4;
                 message<MessageType::PUBACK>.variable_header.packet_id = msg.variable_header.packet_id;
                 message<MessageType::PUBACK>.variable_header.code = result ? PubAckReasonCode::SUCCESS : PubAckReasonCode::IMPL_SPECIFIC_ERROR;
+                #if MQTT_VERSION >= 5
                 message<MessageType::PUBACK>.variable_header.properties.properties.clear();
+                #endif
                 if(!c->send(message<MessageType::PUBACK>))
                     ulog::warn(ulog::join("Cannot send PUBACK for packet #", msg.variable_header.packet_id));
                 break;
@@ -96,7 +98,7 @@ void Client::process()
 {
     FixedHeader hdr;
     
-    if(!Serializer<FixedHeader>::read(get_stream(), hdr))
+    if(!Serializer<FixedHeader>::read(getSocket(), hdr))
     {
         ulog::warn("Cannot read MQTT packet");
         return;
@@ -143,8 +145,9 @@ bool Client::connect_async(const Payload<MessageType::CONNECT>& payload)
 
     msg.variable_header.flags = flags;
     msg.variable_header.keep_alive_timer = 100;
+    #if MQTT_VERSION >= 5
     msg.variable_header.properties.properties.clear();
-
+    #endif
 
     if(!send(msg))
     {
@@ -160,7 +163,9 @@ bool Client::connect_async(const char* username, const char* password)
     auto& msg = message<MessageType::CONNECT>;
     msg.payload.username = username;
     msg.payload.password = password;
+    #if MQTT_VERSION >= 5
     msg.payload.will_properties.properties.clear();
+    #endif
     msg.payload.will_topic.clear();
 
     return connect_async(msg.payload);
@@ -190,7 +195,9 @@ bool Client::publish(const etl::istring& topic, const etl::istring& data, uint8_
     else
         msg.variable_header.packet_id.value = 0;
 
+    #if MQTT_VERSION >= 5
     msg.variable_header.properties.properties.clear();
+    #endif
     msg.payload.payload.assign((const uint8_t*)data.cbegin(), (const uint8_t*)data.cend());
 
     if(qos)
