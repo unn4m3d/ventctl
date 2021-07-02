@@ -1,9 +1,12 @@
 #include <ThermalSensor.hpp>
 #include <PT1000.hpp>
 
+
 ventctl::ThermalSensor::ThermalSensor(const char* name, PinName pin) :
     m_input(pin),
-    Peripheral<float>(name)
+    Peripheral<float>(name),
+    m_values({0}),
+    m_value_cnt(0)
 {}
 
 float ventctl::ThermalSensor::read_value()
@@ -18,7 +21,10 @@ float ventctl::ThermalSensor::read_raw()
 
 float ventctl::ThermalSensor::read_voltage()
 {
-    return read_voltage(read_raw());
+    float result = 0.0;
+    for(auto value : m_values) result += value;
+    result /= VC_TS_F;
+    return read_voltage(result);
 }
 
 float ventctl::ThermalSensor::read_voltage(float raw)
@@ -57,4 +63,12 @@ void ventctl::ThermalSensor::print(ventctl::file_t file, bool s)
         fprintf(file, "=%1.1f", temp);
     else
         fprintf(file, "= %1.4f C (%1.4f, %1.4f V, %1.2f Ohm)", temp, raw, voltage, res);
+}
+
+
+void ventctl::ThermalSensor::update()
+{
+    m_values[m_value_cnt] = read_raw();
+    m_value_cnt++;
+    m_value_cnt %= VC_TS_F;
 }

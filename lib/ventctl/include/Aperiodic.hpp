@@ -1,29 +1,31 @@
 #pragma once
+#include <Unit.hpp>
 
 namespace ventctl
 {
-    class Aperiodic
+    class Aperiodic : public UnitBase
     {
     public:
-        Aperiodic(float k, float tp) : m_k(k), m_tp(tp), m_last_time(0.0), m_integral(0.0){}
+        Aperiodic(UnitBase& input, float k, float tp) : 
+            m_input(input),
+            m_k(k), 
+            m_tp(tp),
+            m_integral(0.0)
+        {}
 
-        void setLastTime(float t)
+        virtual float getValueUncached(float time)
         {
-            m_last_time = t;
-        }
-
-        float nextValue(float input, float time)
-        {
+            auto m_last_time = getLastTime();
             auto result = m_integral / m_tp;
 
-            m_integral += (m_k * input - result) * (time - m_last_time);
-            m_last_time = time;
+            m_integral += (m_k * m_input.getValue(time) - result) * (time - m_last_time);
 
             return result;
         }
 
     private:
-        float m_k, m_tp, m_last_time, m_integral;
+        UnitBase& m_input;
+        float m_k, m_tp, m_integral;
     };
 }
 

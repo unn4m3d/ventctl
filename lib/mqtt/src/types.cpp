@@ -7,9 +7,14 @@ bool Payload<MessageType::CONNECT>::write(Stream& s)
 {
     if(!detail::write(s, client_id)) return false;
 
+    #ifdef MQTT_V5
     if(will_properties.properties.size() > 0 || !will_topic.empty() || !will_payload.empty())
     {
         if(!detail::write(s, will_properties)) return false;
+    #else
+    if(!will_topic.empty() || !will_payload.empty())
+    {
+    #endif
         if(!detail::write(s, will_topic)) return false;
         if(!detail::write(s, will_payload)) return false;
     }

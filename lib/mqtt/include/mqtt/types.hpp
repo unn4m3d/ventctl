@@ -58,7 +58,8 @@ namespace mqtt
         QOS_NOT_SUPPORTED = 0x9B,
         USE_ANOTHER_SERVER = 0x9C,
         SERVER_MOVED = 0x9D,
-        CONNECTION_RATE_EXCEEDED = 0x9F 
+        CONNECTION_RATE_EXCEEDED = 0x9F,
+        INVALID = 0xFF
     };
 
     template<>
@@ -126,7 +127,11 @@ namespace mqtt
         {
             size_t len = 0;
             len += client_id.length() + 2;
+            #ifdef MQTT_V5
             if(will_properties.properties.size() > 0 || !will_topic.empty() || !will_payload.empty())
+            #else
+            if(!will_topic.empty() || !will_payload.empty())
+            #endif
             {
                 len += will_properties.get_length() + will_topic.length() + will_payload.length() + 4;
             }

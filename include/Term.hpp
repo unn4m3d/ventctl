@@ -10,6 +10,7 @@
 #include <charconv.hpp>
 #include <Peripheral.hpp>
 #include <ventctl.hpp>
+#include <settings.hpp>
 
 using Serial = mbed::Serial;
 namespace ventctl
@@ -95,6 +96,53 @@ namespace ventctl
                     printf("\n");
                     counter++;
                 }
+            }
+            else if(match_cmd(view, "s "))
+            {
+                if(match_cmd(view, "ip "))
+                {
+                    printf("Not impl\n");
+                }
+                else if(match_cmd(view, "api "))
+                {
+                    auto size = std::min({view.size(), sizeof(application_settings.api_addr) - 1}); 
+                    std::memcpy(application_settings.api_addr, view.data(), view.size());
+                    application_settings.api_addr[size] = 0;
+                    printf("OK\n"); 
+                }
+                else if(match_cmd(view, "user "))
+                {
+
+                }
+                else if(match_cmd(view, "pass "))
+                {
+
+                }
+                else if(match_cmd(view, "cal"))
+                {
+                    auto number = parse_arg<int>(view, &exc);
+                    
+                }
+            }
+            else if(match_cmd(view, "save"))
+            {
+                auto result = save_settings();
+                if(result)
+                    printf("OK!\n");
+                else
+                    printf("Fuck\n");
+            }
+            else if(match_cmd(view, "ps"))
+            {
+                printf("api addr: %s\n", application_settings.api_addr);
+            }
+            else if(match_cmd(view, "erase"))
+            {
+                auto result = ventctl::flash.erase(ventctl::SETTINGS_START, ventctl::SETTINGS_SIZE);
+                if(result == 0)
+                    printf("OK\n");
+                else
+                    printf("Fuck %d\n", (int)result);
             }
             else
             {

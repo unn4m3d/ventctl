@@ -9,9 +9,13 @@
 #include <tuple>
 #include <cstring>
 #include <algorithm>
+#include <ulog.hpp>
 
 namespace mqtt
 {
+
+    bool wait_readable(Stream&, float);
+
     namespace detail
     {
         template<typename T, std::enable_if_t<std::is_class<T>::value, int> = 0>
@@ -24,11 +28,18 @@ namespace mqtt
 
             char* buf = reinterpret_cast<char*>(&value);
 
-            while(!s.readable());
+            if(!wait_readable(s, MQTT_TIMEOUT))
+            {
+                ulog::severe("Timeout expired");
+                return false;
+            }
 
             auto len = s.read(buf, size);
             
-            if(len < size) return false;
+            if(len < size) {
+                ulog::severe("Cannot read integral value");
+                return false;
+            }
 
             std::reverse(buf, buf + size);
 
@@ -38,23 +49,38 @@ namespace mqtt
         template<typename T, size_t N>
         bool read(Stream& s, T value[N], FixedHeader* fhdr = nullptr)
         {
-            while(!s.readable());
+            if(!wait_readable(s, MQTT_TIMEOUT))
+            {
+                ulog::severe("Timeout expired");
+                return false;
+            }
             return s.read(value, N) == N;
         }
 
         template<size_t N>
         bool read(Stream& s, etl::string<N>& str, FixedHeader* fhdr = nullptr)
         {
-            while(!s.readable());
+            if(!wait_readable(s, MQTT_TIMEOUT))
+            {
+                ulog::severe("Timeout expired");
+                return false;
+            }
             uint16_t length;
-            if(!read(s, length)) return false;
+            if(!read(s, length)){
+                ulog::severe("Cannot read length of string");
+                return false;
+            }
 
             char buf[N];
 
             auto actual_length = length < N ? length : N;
             if(actual_length == 0) return true;
 
-            while(!s.readable());
+            if(!wait_readable(s, MQTT_TIMEOUT))
+            {
+                ulog::severe("Timeout expired");
+                return false;
+            }
 
             auto result = s.read(buf, actual_length);
 
@@ -71,8 +97,11 @@ namespace mqtt
         bool read_variant(Stream& s, etl::variant<Ts...>& v)
         {
             T t = 0;
-            if(!read(s, t)) return false;
-            
+            if(!read(s, t))
+            {
+                ulog::severe("Cannot read variant");
+                return false;
+            }
             v = t;
             return true;
         }
@@ -80,6 +109,7 @@ namespace mqtt
         template<size_t N>
         bool read(Stream& s, Properties<N>& prop, FixedHeader* fhdr = nullptr)
         {
+            #ifdef MQTT_V5
             if(!read(s, prop.length)) return false;
 
             prop.properties.clear();
@@ -89,7 +119,11 @@ namespace mqtt
             for(size_t i = 0; byte_count < prop.length && i < N; i++)
             {
                 Property p;
-                if(!read(s, p.type)) return false;
+                if(!read(s, p.type))
+                {
+                    ulog::severe("Cannot read property type");
+                    return false;
+                }
                 byte_count++;
 
                 switch(p.type)
@@ -186,18 +220,24 @@ namespace mqtt
 
                 prop.properties.push_back(p);
             }
-
+            #endif
             return true;
         }
         
         template<typename T>
         bool read(Stream& s, QoSOnly<T>& value, FixedHeader* fhdr = nullptr)
         {
-            if(fhdr == nullptr) return false;
-
+            if(fhdr == nullptr){
+                ulog::severe("Cannot read QoSOnly: No fhdr supplied");
+                return false;
+            }
             if(fhdr->type_and_flags & 6)
             {
-                if(!read(s, value.value)) return false;
+                if(!read(s, value.value))
+                {
+                    ulog::severe("Cannot read QoSOnly");
+                    return false;
+                }
             }
 
             return true;
@@ -254,6 +294,7 @@ namespace mqtt
         template<size_t N>
         bool write(Stream& s, Properties<N>& p)
         {
+            #ifdef MQTT_V5
             VariableByteInteger len(p.get_length() - 1);
 
             if(!write(s, len)) return false;
@@ -296,7 +337,7 @@ namespace mqtt
                     if(!write(s, sp.first) || !write(s, sp.second)) return false;
                 }
             }
-
+            #endif
             return true;
         }
 

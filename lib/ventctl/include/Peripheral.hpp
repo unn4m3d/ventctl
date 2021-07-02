@@ -65,6 +65,9 @@ namespace ventctl
             etl::erase(m_peripherals, this);
         }
 
+        virtual void initialize() {}
+        virtual void update() {}
+
     private:
         const char* m_name;
 
@@ -110,4 +113,4 @@ namespace ventctl
     extern template class Peripheral<float>;
     extern template class Peripheral<bool>;
     extern template class Peripheral<int>;
-};
+}
