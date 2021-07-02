@@ -1,15 +1,26 @@
 #pragma once
 #include <Peripheral.hpp>
 #include <mbed.h>
-
-#define VC_TS_F 64
+#include <stm32f4xx_hal_adc.h>
 
 namespace ventctl
 {
-    class ThermalSensor : public Peripheral<float>
+    class HiFiThermalSensor : public Peripheral<float>
     {
     public:
-        ThermalSensor(const char* name, PinName pin);
+        enum SamplingTime
+        {
+            S3_CYCLES,
+            S15_CYCLES,
+            S28_CYCLES,
+            S56_CYCLES,
+            S84_CYCLES,
+            S112_CYCLES,
+            S144_CYCLES,
+            S480_CYCLES
+        };
+
+        HiFiThermalSensor(const char* name, uint8_t channel, SamplingTime time = S15_CYCLES);
 
         virtual bool accept_value(float&) { return false; } // This thing doesn't accept values to output
 
@@ -30,13 +41,13 @@ namespace ventctl
         static float read_temperature(float resistance);
 
         virtual void print(file_t file, bool s = false);
-        
-        virtual void update() override;
+
+        virtual void initialize();
+        virtual void update();
 
     private:
-        AnalogIn m_input;
-
-        float m_values[VC_TS_F];
-        uint8_t m_value_cnt;
+        uint8_t m_channel;
+        float m_voltage;
+        SamplingTime m_samplingTime;
     };
 }

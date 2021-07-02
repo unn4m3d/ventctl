@@ -99,4 +99,20 @@ namespace ventctl
             return true;
         }
     }
+
+    template<>
+    etl::string_view parse_arg<etl::string_view>(etl::string_view& v, etl::exception* exc)
+    {
+        auto pos = v.find_first_of(" \t\r\n");
+
+        if(pos != etl::string_view::npos)
+        {
+            etl::string_view ret = v;
+            if(ret.starts_with(" "))
+                ret.remove_prefix(1);
+            return ret;
+        }
+        else
+            return v.substr(0, pos);
+    }
 }

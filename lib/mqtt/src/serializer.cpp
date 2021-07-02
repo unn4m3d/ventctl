@@ -1,4 +1,5 @@
 #include <mqtt/serializer.hpp>
+#include <ulog.hpp>
 
 using namespace mqtt;
 using namespace mqtt::detail;

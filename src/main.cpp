@@ -3,6 +3,7 @@
     using AnalogOut = void;
 #endif
 
+
 #include <Term.hpp>
 #include <etl/vector.h>
 #include <cmath>
@@ -19,7 +20,10 @@
 #include <Saturation.hpp>
 #include <mqtt/Client.hpp>
 #include <ulog.hpp>
-#include <stm32f4xx_hal_adc.h>
+#include <HiFiThermalSensor.hpp>
+#include <settings.hpp>
+#include <Aperiodic.hpp>
+#include <ModbusMaster.h>
 
 
 /*
@@ -103,6 +107,12 @@ ventctl::ThermalSensor
     temp_coolant("T_C", PA_0),
     temp_oflow("T_OFlow", PA_3);
 
+/*ventctl::HiFiThermalSensor
+    temp_room("T_Room", 13),
+    temp_iflow("T_IFlow", 12),
+    temp_coolant("T_C", 0),
+    temp_oflow("T_OFlow", 3);*/
+
 ventctl::Variable<float>
     k_p("Kp", 0.5),
     temp_setting("S_Temp", 25.0),
@@ -113,9 +123,24 @@ ventctl::Variable<bool>
     log_state("Log", false),
     manual_override("Manual", false);
     
+Serial pc(PC_12, PD_2);
+RawSerial rs485(PA_9, PA_10);
+DigitalOut rs485_de(PA_11), rs485_re(PA_12);
 
-Serial pc(PA_9, PA_10); 
+void pre_transmission()
+{
+    rs485_re = 0;
+    rs485_de = 1;
+}
+
+void post_transmission()
+{
+    rs485_re = 0;
+    rs485_de = 1;
+}
+
 ventctl::Term term(pc);
+ModbusMaster modbus;
 
 /*ventctl::PIDController<float, float>
     pid_room_temp(2, 0.5, 0.5, 0, 50, 1),
@@ -129,9 +154,7 @@ ventctl::PIDController<float, float>
     pid_room_temp(2, 0.5, 0, 0, 50, 1),
     pid_intake_temp(0.1, 0.0001, 0, -1, 1, 1),
     pid_correction(0.1, 0.01, 0, 0, 3, 0),
-    pid_intake_flow(0.1, 0.5, 0, 0, 1, 1),
-    pid_deicer(1,1,0,0,2,1),
-    pid_exhaust_flow(0.1, 1, 0, 0, 1, 1);
+    pid_deicer(1,1,0,0,2,1);
 
 ventctl::Source
     src_room_temp(temp_room),
@@ -144,6 +167,10 @@ ventctl::Source
     src_temp_setting(temp_setting),
     src_iflow_setting(inflow_setting),
     src_oflow_setting(outflow_setting);
+
+ventctl::Aperiodic
+    src_iflow_temp_f(src_iflow_temp, 1.0, 1.0),
+    src_oflow_temp_f(src_oflow_temp, 1.0, 1.0);
 
 ventctl::Sum
     temp_error({{src_temp_setting, false}, {src_room_temp, true}});
@@ -186,9 +213,13 @@ etl::vector<ventctl::PeriphRef<bool>, 6> heater_ref = {
     heater4,
     heater5};
 
+ventctl::Aperiodic
+    heater_power_filter(heater_power_limit, 1.0, 10.0),
+    cooler_power_filter(cooler_power_limit, 1.0, 10.0);
+
 ventctl::SteppedOutputSink
-    heater_power_sink(heater_power_limit, heater_ref, false),
-    cooler_power_sink(cooler_power_limit, cooler, false);
+    heater_power_sink(heater_power_filter, heater_ref, false),
+    cooler_power_sink(cooler_power_filter, cooler, false);
 
 
 FileHandle *mbed::mbed_override_console(int fd)
@@ -239,63 +270,80 @@ AnalogIn vref(ADC_VREF);
 
 int main()
 {
-    printf("Nigga\n");
+    printf("Venctl Init...\n");
+    etl::error_handler::set_callback<error_handler>();
+    for(ventctl::PeripheralBase* p : ventctl::PeripheralBase::get_peripherals())
+    {
+        p->initialize();
+    }
 
     auto cb = ulog::callback_t([](ulog::log_level l , ulog::string_t s){
-        printf("[%d] %s\n", (int)l, s );
+        printf("[%d] %s\n", (int)l, s.c_str() );
     });
 
     ulog::set_callback(cb);
 
-    
+    modbus.preTransmission(&pre_transmission);
+    modbus.postTransmission(&post_transmission);
+    modbus.begin(228, rs485);
 
-     printf("3637\n");
+    auto result = ventctl::flash.init();
+
+    printf("Flash init status: %d\n", (int)result);
+
+    result = !ventctl::load_settings();
+
+
+    printf("Settings load status : %d\n", (int)result);
 
     auto err = eth.connect();
 
-    printf("7369 %d\n", (int)err);
+    printf("Eth connection status: %d\n", (int)err);
     TLSSocket socket;
     mqtt::Client client(&socket);
 
-    printf("ебет...\n");
-
     err = socket.open(&eth);
 
-    printf("тебя %d\n", (int)err);
+    printf("Socket open status: %d\n", (int)err);
     err = socket.set_root_ca_cert(ca_cert);
 
-    printf("!!!! %d\n", (int)err);
+    printf("CA Cert status: %d\n", (int)err);
 
     SocketAddress addr;
     err = eth.gethostbyname("api-demo.wolkabout.com", &addr);
 
-    printf("fuck %d\n", (int)err);
+    printf("DNS query status: %d\n", (int)err);
     addr.set_port(8883);
     socket.connect(addr);
 
-    printf("Hello man\n");
+    printf("Connected\n");
 
-    client.connect_async("man","dude");
+    result = client.connect_async("man","dude");
+    auto start_time = ventctl::time();
+    if(result)
+    {
+        printf("MQTT CONNECT packet sent\n");
+        while(client.status() == mqtt::ConnectReasonCode::UNSPECIFIED && ventctl::time() < start_time + 10.0)
+        {
+            client.process(); // TODO : Thread
+        }
+        ulog::debug(ulog::join("MQTT client connection status : ", client.status()));
+    }
+    else
+    {
+        printf("Cannot send MQTT CONNECT packet\n");
+    }
     
-    while(!client.connected());
-
-    printf("Err code : %d\n", (int)client.status());
-
-    etl::error_handler::set_callback<error_handler>();
-
     motor1 = 0.5;
     motor2 = 0.5;
 
-
-    ADC1->SMPR1 = 0333333333;
-    ADC1->SMPR2 = 03333333333;
-    ADC2->SMPR1 = 0333333333;
-    ADC2->SMPR2 = 03333333333;
-    ADC3->SMPR1 = 0333333333;
-    ADC3->SMPR2 = 03333333333;
-
     while(1)
     {
+        for(ventctl::PeripheralBase* p : ventctl::PeripheralBase::get_peripherals())
+        {
+            p->update();
+        }
+
         if(!manual_override)
         {
             heater_power_sink.update(ventctl::time());
@@ -304,8 +352,11 @@ int main()
 
         if(log_state)
         {
-            printf("T = %.2f (%.4fV), H = %.3f, C = %.1f, Ref = %.4fV\n", temp_room.read_temperature(), temp_room.read_voltage(), heater_power_limit.getLast(), cooler_power_limit.getLast(), vref.read() * 3.3);
-            wait_ms(200);
+            static uint8_t i = 0;
+
+            if(i++ == 0)
+                printf("T = %.2f (%.4fV), H = %.3f, C = %.1f, Ref = %.4fV\n", temp_room.read_temperature(), temp_room.read_voltage(), heater_power_limit.getLast(), cooler_power_limit.getLast(), vref.read() * 3.3);
+            //wait_ms(200);
         }
 
         term.try_command();

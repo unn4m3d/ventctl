@@ -14,6 +14,9 @@
 
 namespace mqtt
 {
+
+    bool wait_readable(Stream&, float);
+
     namespace detail
     {
 
@@ -119,8 +122,11 @@ namespace mqtt
         bool read_variant(Socket& s, etl::variant<Ts...>& v)
         {
             T t = 0;
-            if(!read(s, t)) return false;
-            
+            if(!read(s, t))
+            {
+                ulog::severe("Cannot read variant");
+                return false;
+            }
             v = t;
             return true;
         }
@@ -138,7 +144,11 @@ namespace mqtt
             for(size_t i = 0; byte_count < prop.length && i < N; i++)
             {
                 Property p;
-                if(!read(s, p.type)) return false;
+                if(!read(s, p.type))
+                {
+                    ulog::severe("Cannot read property type");
+                    return false;
+                }
                 byte_count++;
 
                 switch(p.type)
@@ -242,11 +252,17 @@ namespace mqtt
         template<typename T>
         bool read(Socket& s, QoSOnly<T>& value, FixedHeader* fhdr = nullptr)
         {
-            if(fhdr == nullptr) return false;
-
+            if(fhdr == nullptr){
+                ulog::severe("Cannot read QoSOnly: No fhdr supplied");
+                return false;
+            }
             if(fhdr->type_and_flags & 6)
             {
-                if(!read(s, value.value)) return false;
+                if(!read(s, value.value))
+                {
+                    ulog::severe("Cannot read QoSOnly");
+                    return false;
+                }
             }
 
             return true;

@@ -31,7 +31,7 @@ namespace mqtt
     {
         static void process_impl(Client* client, FixedHeader& hd)
         {
-            ulog::warn(ulog::join("No actions for MQTT Packet type : ", (int)Type));
+            ulog::warn(ulog::join("No actions for Packet type : ", Type));
         }
     };
 

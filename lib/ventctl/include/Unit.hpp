@@ -19,6 +19,11 @@ namespace ventctl
             m_last_time = time;
         }
 
+        float getLastTime()
+        {
+            return m_last_time;
+        }
+
         virtual float getValue(float time)
         {
             if(m_last_time < time)
@@ -147,7 +152,6 @@ namespace ventctl
 
     };
 
-    // Use as either Relay<float> or Relay<Peripheral<float>&>
     template<typename TLim>
     class Relay : public UnitBase
     {
