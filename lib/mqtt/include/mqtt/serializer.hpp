@@ -14,11 +14,43 @@ namespace mqtt
 {
     namespace detail
     {
+
+        template<typename T>
+        inline bool read_raw(Socket& s, T& value, float timeout, bool flip = true)
+        {
+            auto stop_time = mqtt::time() + timeout;
+
+            auto cnt = 0;
+
+            value = 0;
+
+            while(cnt < sizeof(T))
+            {
+                if(mqtt::time() > stop_time)
+                {
+                    ulog::warn("Timeout expired");
+                    return false;
+                }
+
+                auto read = s.recv(&value, sizeof(T) - cnt);
+
+                if(read < 0)
+                {
+                    ulog::warn(ulog::join("Socket error ", read));
+                    return false;
+                }
+                
+                cnt += read;
+            }
+
+            return true;
+        }
+
         template<typename T, std::enable_if_t<std::is_class<T>::value, int> = 0>
-        bool read(Stream& s, T& value, FixedHeader* fhdr = nullptr);
+        bool read(Socket& s, T& value, FixedHeader* fhdr = nullptr);
 
         template<typename T, std::enable_if_t<std::is_integral<T>::value || std::is_enum<T>::value, int> = 0>
-        bool read(Stream& s, T& value, FixedHeader* fhdr = nullptr)
+        bool read(Socket& s, T& value, FixedHeader* fhdr = nullptr)
         {
             auto size = sizeof(T);
 
@@ -36,14 +68,14 @@ namespace mqtt
         }
 
         template<typename T, size_t N>
-        bool read(Stream& s, T value[N], FixedHeader* fhdr = nullptr)
+        bool read(Socket& s, T value[N], FixedHeader* fhdr = nullptr)
         {
             while(!s.readable());
             return s.read(value, N) == N;
         }
 
         template<size_t N>
-        bool read(Stream& s, etl::string<N>& str, FixedHeader* fhdr = nullptr)
+        bool read(Socket& s, etl::string<N>& str, FixedHeader* fhdr = nullptr)
         {
             while(!s.readable());
             uint16_t length;
@@ -65,10 +97,10 @@ namespace mqtt
             return result == actual_length;
         }
 
-        bool read(Stream&s, VariableByteInteger& value, FixedHeader* fhdr = nullptr);
+        bool read(Socket&s, VariableByteInteger& value, FixedHeader* fhdr = nullptr);
 
         template<typename T, typename ... Ts>
-        bool read_variant(Stream& s, etl::variant<Ts...>& v)
+        bool read_variant(Socket& s, etl::variant<Ts...>& v)
         {
             T t = 0;
             if(!read(s, t)) return false;
@@ -78,7 +110,7 @@ namespace mqtt
         }
 
         template<size_t N>
-        bool read(Stream& s, Properties<N>& prop, FixedHeader* fhdr = nullptr)
+        bool read(Socket& s, Properties<N>& prop, FixedHeader* fhdr = nullptr)
         {
             if(!read(s, prop.length)) return false;
 
@@ -191,7 +223,7 @@ namespace mqtt
         }
         
         template<typename T>
-        bool read(Stream& s, QoSOnly<T>& value, FixedHeader* fhdr = nullptr)
+        bool read(Socket& s, QoSOnly<T>& value, FixedHeader* fhdr = nullptr)
         {
             if(fhdr == nullptr) return false;
 
@@ -204,16 +236,16 @@ namespace mqtt
         }
         
         template<typename T1, typename T2>
-        bool read(Stream& s, std::pair<T1, T2>& value, FixedHeader* fhdr = nullptr)
+        bool read(Socket& s, std::pair<T1, T2>& value, FixedHeader* fhdr = nullptr)
         {
             return read(s, value.first) && read(s, value.second);
         }
 
         template<typename T, std::enable_if_t<std::is_class<T>::value, int> = 0>
-        bool write(Stream& s, T& value);
+        bool write(Socket& s, T& value);
 
         template<typename T, std::enable_if_t<std::is_integral<T>::value || std::is_enum<T>::value, char> = 0>
-        bool write(Stream& s, T value)
+        bool write(Socket& s, T value)
         {
             auto size = sizeof(T);
 
@@ -228,19 +260,19 @@ namespace mqtt
         }
 
         template<typename T1, typename T2>
-        bool write(Stream& s, std::pair<T1, T2>& value)
+        bool write(Socket& s, std::pair<T1, T2>& value)
         {
             return write(s, value.first) && write(s, value.second);
         }
 
         template<typename T, size_t N>
-        bool write(Stream& s, T value[N])
+        bool write(Socket& s, T value[N])
         {
             return s.write(value, N) == N;
         }
 
         template<size_t N>
-        bool write(Stream& s, etl::string<N>& str)
+        bool write(Socket& s, etl::string<N>& str)
         {
             if(!write(s, (uint16_t)str.length())) return false;
 
@@ -249,10 +281,10 @@ namespace mqtt
             return result == str.length();
         }
 
-        bool write(Stream&s, VariableByteInteger& value);
+        bool write(Socket&s, VariableByteInteger& value);
 
         template<size_t N>
-        bool write(Stream& s, Properties<N>& p)
+        bool write(Socket& s, Properties<N>& p)
         {
             VariableByteInteger len(p.get_length() - 1);
 
@@ -301,7 +333,7 @@ namespace mqtt
         }
 
         template<typename T>
-        bool write(Stream& s, QoSOnly<T>& value)
+        bool write(Socket& s, QoSOnly<T>& value)
         {
             if(value) return write(s, value.value);
             return true;
@@ -315,7 +347,7 @@ namespace mqtt
 
         using type_list = luple_ns::luple_t<loophole_ns::as_type_list<T> >;
 
-        static bool read(Stream& s, T& hdr, FixedHeader* fhdr = nullptr)
+        static bool read(Socket& s, T& hdr, FixedHeader* fhdr = nullptr)
         {
             auto& luple = reinterpret_cast<type_list&>(hdr);
 
@@ -328,7 +360,7 @@ namespace mqtt
             return status;
         }
 
-        static bool write(Stream& s, T& value)
+        static bool write(Socket& s, T& value)
         {
             auto& luple = reinterpret_cast<type_list&>(value);
 
@@ -344,13 +376,13 @@ namespace mqtt
     namespace detail
     {
         template<typename T>
-        std::enable_if_t<std::is_class<T>::value, bool> read(Stream& s, T& value)
+        std::enable_if_t<std::is_class<T>::value, bool> read(Socket& s, T& value)
         {
             return Serializer<T>::read(s, value);
         }
 
         template<typename T>
-        std::enable_if_t<std::is_class<T>::value, bool> write(Stream& s, T& value)
+        std::enable_if_t<std::is_class<T>::value, bool> write(Socket& s, T& value)
         {
             return Serializer<T>::write(s, value);
         }
@@ -363,7 +395,7 @@ namespace mqtt
         VariableHeader<Type> variable_header;
         Payload<Type> payload;
 
-        bool read(Stream& s)
+        bool read(Socket& s)
         {
             if(!Serializer<FixedHeader>::read(s, fixed_header)) return false;
             if(!Serializer<VariableHeader<Type>>::read(s, variable_header, &fixed_header)) return false;
@@ -371,14 +403,14 @@ namespace mqtt
             return true;
         }
 
-        bool read_without_fixed_header(Stream& s)
+        bool read_without_fixed_header(Socket& s)
         {
             if(!Serializer<VariableHeader<Type>>::read(s, variable_header, &fixed_header)) return false;
             if(!Payload<Type>::read(s, payload, fixed_header, variable_header)) return false;
             return true;
         }
 
-        bool write(Stream& s)
+        bool write(Socket& s)
         {
             if(!Serializer<FixedHeader>::write(s, fixed_header)) return false;
             if(!Serializer<VariableHeader<Type>>::write(s, variable_header)) return false;

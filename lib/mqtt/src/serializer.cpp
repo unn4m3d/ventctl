@@ -3,7 +3,7 @@
 using namespace mqtt;
 using namespace mqtt::detail;
 
-bool mqtt::detail::read(Stream&s, VariableByteInteger& value, FixedHeader*)
+bool mqtt::detail::read(Socket&s, VariableByteInteger& value, FixedHeader*)
 {
     uint32_t inner_value = 0;
     char data, shift = 0;
@@ -22,7 +22,7 @@ bool mqtt::detail::read(Stream&s, VariableByteInteger& value, FixedHeader*)
     return true;
 }
 
-bool mqtt::detail::write(Stream&s, VariableByteInteger& value)
+bool mqtt::detail::write(Socket &s, VariableByteInteger& value)
 {
     uint32_t len = value;
 
