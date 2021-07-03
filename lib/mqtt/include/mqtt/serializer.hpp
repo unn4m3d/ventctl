@@ -10,6 +10,7 @@
 #include <cstring>
 #include <algorithm>
 #include <ulog.hpp>
+#include <util.hpp>
 
 namespace mqtt
 {
@@ -18,83 +19,167 @@ namespace mqtt
 
     namespace detail
     {
-        template<typename T, std::enable_if_t<std::is_class<T>::value, int> = 0>
-        bool read(Stream& s, T& value, FixedHeader* fhdr = nullptr);
 
-        template<typename T, std::enable_if_t<std::is_integral<T>::value || std::is_enum<T>::value, int> = 0>
-        bool read(Stream& s, T& value, FixedHeader* fhdr = nullptr)
+        template<typename T>
+        inline bool read_raw(Socket& s, T& value, float timeout, bool flip = true)
         {
-            auto size = sizeof(T);
+            auto stop_time = util::time() + timeout;
 
-            char* buf = reinterpret_cast<char*>(&value);
+            auto cnt = 0;
 
-            if(!wait_readable(s, MQTT_TIMEOUT))
+            value = (T)0;
+
+            while(cnt < sizeof(T))
             {
-                ulog::severe("Timeout expired");
-                return false;
+                if(util::time() > stop_time)
+                {
+                    ulog::warn("Timeout expired");
+                    return false;
+                }
+
+                auto read = s.recv((char*)&value + cnt, sizeof(T) - cnt);
+
+                if(read < 0)
+                {
+                    ulog::warn(ulog::join("Socket error ", read));
+                    return false;
+                }
+                
+                cnt += read;
             }
 
-            auto len = s.read(buf, size);
-            
-            if(len < size) {
-                ulog::severe("Cannot read integral value");
-                return false;
-            }
-
-            std::reverse(buf, buf + size);
+            if(flip) std::reverse((char*)&value, (char*)&value + sizeof(T));
 
             return true;
         }
 
-        template<typename T, size_t N>
-        bool read(Stream& s, T value[N], FixedHeader* fhdr = nullptr)
+        template<typename T>
+        inline bool write_raw(Socket& s, T& value, float timeout = MQTT_TIMEOUT, bool flip = true)
         {
-            if(!wait_readable(s, MQTT_TIMEOUT))
+            T copy = value;
+            if(flip) std::reverse((char*)&copy, (char*)&copy + sizeof(T));
+
+            auto stop_time = util::time() + timeout;
+
+            auto cnt = 0;
+
+            while(cnt < sizeof(T))
             {
-                ulog::severe("Timeout expired");
-                return false;
+                if(util::time() > stop_time)
+                {
+                    ulog::warn("Timeout expired");
+                    return false;
+                }
+
+                auto written = s.send((char*)&copy + cnt, sizeof(T) - cnt);
+
+                if(written < 0)
+                {
+                    ulog::warn(ulog::join("Socket error ", written));
+                    return false;
+                }
+                
+                cnt += written;
             }
-            return s.read(value, N) == N;
+
+            return true;
+        }
+
+        inline bool write_raw(Socket& s, const char* c, size_t length, float timeout = MQTT_TIMEOUT)
+        {
+            auto stop_time = util::time() + timeout;
+
+            auto cnt = 0;
+
+            while(cnt < length)
+            {
+                if(util::time() > stop_time)
+                {
+                    ulog::warn("Timeout expired");
+                    return false;
+                }
+
+                auto written = s.send(c + cnt, length - cnt);
+
+                if(written < 0)
+                {
+                    ulog::warn(ulog::join("Socket error ", written));
+                    return false;
+                }
+                
+                cnt += written;
+            }
+
+            return true;
+        }
+
+        inline void skip(Socket& s, size_t n)
+        {
+            while(n > 0)
+            {
+                char c;
+                auto x = s.recv(&c, 1);
+                if(x < 0) return;
+                n -= x;
+            }
+        }
+
+        template<typename T, std::enable_if_t<std::is_class<T>::value, int> = 0>
+        bool read(Socket& s, T& value, FixedHeader* fhdr = nullptr);
+
+        template<typename T, std::enable_if_t<std::is_integral<T>::value || std::is_enum<T>::value, int> = 0>
+        bool read(Socket& s, T& value, FixedHeader* fhdr = nullptr)
+        {
+            return read_raw(s, value, MQTT_TIMEOUT);
+        }
+
+        template<typename T, size_t N>
+        bool read(Socket& s, T value[N], FixedHeader* fhdr = nullptr)
+        {
+            for(size_t i = 0; i < N; ++i)
+            {
+                if(!read_raw(s, value[i], MQTT_TIMEOUT))
+                    return false;
+            }
+            return true;
         }
 
         template<size_t N>
-        bool read(Stream& s, etl::string<N>& str, FixedHeader* fhdr = nullptr)
+        bool read(Socket& s, etl::string<N>& str, FixedHeader* fhdr = nullptr)
         {
-            if(!wait_readable(s, MQTT_TIMEOUT))
-            {
-                ulog::severe("Timeout expired");
-                return false;
-            }
             uint16_t length;
-            if(!read(s, length)){
-                ulog::severe("Cannot read length of string");
-                return false;
-            }
+
+            if(!read_raw(s, length, MQTT_TIMEOUT)) return false;
 
             char buf[N];
 
             auto actual_length = length < N ? length : N;
             if(actual_length == 0) return true;
 
-            if(!wait_readable(s, MQTT_TIMEOUT))
+            for(size_t i = 0; i < actual_length; ++i)
             {
-                ulog::severe("Timeout expired");
-                return false;
+                if(!read_raw(s, buf[i], MQTT_TIMEOUT)) return false;
             }
 
-            auto result = s.read(buf, actual_length);
+            
 
-            if(actual_length < length) s.seek(length - actual_length, SEEK_CUR);
+            str.assign(buf, actual_length);
 
-            str.assign(buf, result);
+            if(actual_length < length)
+            {
+                for(size_t i = 0; i < length - actual_length; ++i)
+                {
+                    if(!read_raw(s, buf[0], MQTT_TIMEOUT)) return false;
+                }
+            }
 
-            return result == actual_length;
+            return true;
         }
 
-        bool read(Stream&s, VariableByteInteger& value, FixedHeader* fhdr = nullptr);
+        bool read(Socket&s, VariableByteInteger& value, FixedHeader* fhdr = nullptr);
 
         template<typename T, typename ... Ts>
-        bool read_variant(Stream& s, etl::variant<Ts...>& v)
+        bool read_variant(Socket& s, etl::variant<Ts...>& v)
         {
             T t = 0;
             if(!read(s, t))
@@ -107,9 +192,9 @@ namespace mqtt
         }
 
         template<size_t N>
-        bool read(Stream& s, Properties<N>& prop, FixedHeader* fhdr = nullptr)
+        bool read(Socket& s, Properties<N>& prop, FixedHeader* fhdr = nullptr)
         {
-            #ifdef MQTT_V5
+            #if MQTT_VERSION >= 5
             if(!read(s, prop.length)) return false;
 
             prop.properties.clear();
@@ -225,7 +310,7 @@ namespace mqtt
         }
         
         template<typename T>
-        bool read(Stream& s, QoSOnly<T>& value, FixedHeader* fhdr = nullptr)
+        bool read(Socket& s, QoSOnly<T>& value, FixedHeader* fhdr = nullptr)
         {
             if(fhdr == nullptr){
                 ulog::severe("Cannot read QoSOnly: No fhdr supplied");
@@ -244,57 +329,55 @@ namespace mqtt
         }
         
         template<typename T1, typename T2>
-        bool read(Stream& s, std::pair<T1, T2>& value, FixedHeader* fhdr = nullptr)
+        bool read(Socket& s, std::pair<T1, T2>& value, FixedHeader* fhdr = nullptr)
         {
             return read(s, value.first) && read(s, value.second);
         }
 
         template<typename T, std::enable_if_t<std::is_class<T>::value, int> = 0>
-        bool write(Stream& s, T& value);
+        bool write(Socket& s, T& value);
 
         template<typename T, std::enable_if_t<std::is_integral<T>::value || std::is_enum<T>::value, char> = 0>
-        bool write(Stream& s, T value)
+        bool write(Socket& s, T value)
         {
-            auto size = sizeof(T);
-
-            char buf[sizeof(T)];
-
-            std::memcpy(reinterpret_cast<void*>(buf), reinterpret_cast<void*>(&value), size);
-            std::reverse(buf, buf + size);
-
-            auto result =  s.write(buf, size) == size;
-
-            return result;
+            return write_raw(s, value, MQTT_TIMEOUT);
         }
 
         template<typename T1, typename T2>
-        bool write(Stream& s, std::pair<T1, T2>& value)
+        bool write(Socket& s, std::pair<T1, T2>& value)
         {
             return write(s, value.first) && write(s, value.second);
         }
 
         template<typename T, size_t N>
-        bool write(Stream& s, T value[N])
+        bool write(Socket& s, T value[N])
         {
-            return s.write(value, N) == N;
+            for(size_t i = 0; i < N; ++i)
+            {
+                if(!write_raw(s, value[i]))
+                {
+                    ulog::warn(ulog::join("Cannot write [",i,"]"));
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         template<size_t N>
-        bool write(Stream& s, etl::string<N>& str)
+        bool write(Socket& s, etl::string<N>& str)
         {
             if(!write(s, (uint16_t)str.length())) return false;
 
-            auto result = s.write(str.data(), str.size());
-
-            return result == str.length();
+            return write_raw(s, str.data(), str.size());
         }
 
-        bool write(Stream&s, VariableByteInteger& value);
+        bool write(Socket&s, VariableByteInteger& value);
 
         template<size_t N>
-        bool write(Stream& s, Properties<N>& p)
+        bool write(Socket& s, Properties<N>& p)
         {
-            #ifdef MQTT_V5
+            #if MQTT_VERSION >= 5
             VariableByteInteger len(p.get_length() - 1);
 
             if(!write(s, len)) return false;
@@ -342,7 +425,7 @@ namespace mqtt
         }
 
         template<typename T>
-        bool write(Stream& s, QoSOnly<T>& value)
+        bool write(Socket& s, QoSOnly<T>& value)
         {
             if(value) return write(s, value.value);
             return true;
@@ -356,7 +439,7 @@ namespace mqtt
 
         using type_list = luple_ns::luple_t<loophole_ns::as_type_list<T> >;
 
-        static bool read(Stream& s, T& hdr, FixedHeader* fhdr = nullptr)
+        static bool read(Socket& s, T& hdr, FixedHeader* fhdr = nullptr)
         {
             auto& luple = reinterpret_cast<type_list&>(hdr);
 
@@ -369,13 +452,15 @@ namespace mqtt
             return status;
         }
 
-        static bool write(Stream& s, T& value)
+        static bool write(Socket& s, T& value)
         {
             auto& luple = reinterpret_cast<type_list&>(value);
 
             bool status = true;
             luple_do(luple, [&status, &s](auto& value){
                 status = status && detail::write(s, value);
+                if(!status)
+                    ulog::severe(ulog::join("Cannot write ", typeid(value).name()));
             });
 
             return status;
@@ -385,13 +470,13 @@ namespace mqtt
     namespace detail
     {
         template<typename T>
-        std::enable_if_t<std::is_class<T>::value, bool> read(Stream& s, T& value)
+        std::enable_if_t<std::is_class<T>::value, bool> read(Socket& s, T& value)
         {
             return Serializer<T>::read(s, value);
         }
 
         template<typename T>
-        std::enable_if_t<std::is_class<T>::value, bool> write(Stream& s, T& value)
+        std::enable_if_t<std::is_class<T>::value, bool> write(Socket& s, T& value)
         {
             return Serializer<T>::write(s, value);
         }
@@ -404,25 +489,30 @@ namespace mqtt
         VariableHeader<Type> variable_header;
         Payload<Type> payload;
 
-        bool read(Stream& s)
+        bool read(Socket& s)
         {
+            
             if(!Serializer<FixedHeader>::read(s, fixed_header)) return false;
+            
             if(!Serializer<VariableHeader<Type>>::read(s, variable_header, &fixed_header)) return false;
             if(!Payload<Type>::read(s, payload, fixed_header, variable_header)) return false;
             return true;
         }
 
-        bool read_without_fixed_header(Stream& s)
+        bool read_without_fixed_header(Socket& s)
         {
             if(!Serializer<VariableHeader<Type>>::read(s, variable_header, &fixed_header)) return false;
             if(!Payload<Type>::read(s, payload, fixed_header, variable_header)) return false;
             return true;
         }
 
-        bool write(Stream& s)
+        bool write(Socket& s)
         {
+            ulog::info("Sending FHdr");   
             if(!Serializer<FixedHeader>::write(s, fixed_header)) return false;
+            ulog::info("Sending VHdr");
             if(!Serializer<VariableHeader<Type>>::write(s, variable_header)) return false;
+            ulog::info("Sending Payload");
             if(!Serializer<Payload<Type>>::write(s, payload)) return false;
             return true;
         }

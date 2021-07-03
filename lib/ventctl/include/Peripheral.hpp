@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <loophole.hpp>
 
+
 #ifndef VC_PERIPH_CAP
     #define VC_PERIPH_CAP 64
 #endif
@@ -13,6 +14,7 @@ namespace ventctl
     using file_t = FILE*;
     using type_id_t = int;
 
+    
     class PeripheralBase
     {
     public: 
