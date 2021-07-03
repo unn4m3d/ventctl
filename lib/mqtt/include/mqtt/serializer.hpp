@@ -37,7 +37,7 @@ namespace mqtt
                     return false;
                 }
 
-                auto read = s.recv(&value + cnt, sizeof(T) - cnt);
+                auto read = s.recv((char*)&value + cnt, sizeof(T) - cnt);
 
                 if(read < 0)
                 {
@@ -49,6 +49,66 @@ namespace mqtt
             }
 
             if(flip) std::reverse((char*)&value, (char*)&value + sizeof(T));
+
+            return true;
+        }
+
+        template<typename T>
+        inline bool write_raw(Socket& s, T& value, float timeout = MQTT_TIMEOUT, bool flip = true)
+        {
+            T copy = value;
+            if(flip) std::reverse((char*)&copy, (char*)&copy + sizeof(T));
+
+            auto stop_time = util::time() + timeout;
+
+            auto cnt = 0;
+
+            while(cnt < sizeof(T))
+            {
+                if(util::time() > stop_time)
+                {
+                    ulog::warn("Timeout expired");
+                    return false;
+                }
+
+                auto written = s.send((char*)&copy + cnt, sizeof(T) - cnt);
+
+                if(written < 0)
+                {
+                    ulog::warn(ulog::join("Socket error ", written));
+                    return false;
+                }
+                
+                cnt += written;
+            }
+
+            return true;
+        }
+
+        inline bool write_raw(Socket& s, const char* c, size_t length, float timeout = MQTT_TIMEOUT)
+        {
+            auto stop_time = util::time() + timeout;
+
+            auto cnt = 0;
+
+            while(cnt < length)
+            {
+                if(util::time() > stop_time)
+                {
+                    ulog::warn("Timeout expired");
+                    return false;
+                }
+
+                auto written = s.send(c + cnt, length - cnt);
+
+                if(written < 0)
+                {
+                    ulog::warn(ulog::join("Socket error ", written));
+                    return false;
+                }
+                
+                cnt += written;
+            }
 
             return true;
         }
@@ -280,16 +340,7 @@ namespace mqtt
         template<typename T, std::enable_if_t<std::is_integral<T>::value || std::is_enum<T>::value, char> = 0>
         bool write(Socket& s, T value)
         {
-            auto size = sizeof(T);
-
-            char buf[sizeof(T)];
-
-            std::memcpy(reinterpret_cast<void*>(buf), reinterpret_cast<void*>(&value), size);
-            std::reverse(buf, buf + size);
-
-            auto result =  s.send(buf, size) == size;
-
-            return result;
+            return write_raw(s, value, MQTT_TIMEOUT);
         }
 
         template<typename T1, typename T2>
@@ -301,7 +352,16 @@ namespace mqtt
         template<typename T, size_t N>
         bool write(Socket& s, T value[N])
         {
-            return s.send(value, N * sizeof(T)) == N * sizeof(T);
+            for(size_t i = 0; i < N; ++i)
+            {
+                if(!write_raw(s, value[i]))
+                {
+                    ulog::warn(ulog::join("Cannot write [",i,"]"));
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         template<size_t N>
@@ -309,9 +369,7 @@ namespace mqtt
         {
             if(!write(s, (uint16_t)str.length())) return false;
 
-            auto result = s.send(str.data(), str.size());
-
-            return result == str.length();
+            return write_raw(s, str.data(), str.size());
         }
 
         bool write(Socket&s, VariableByteInteger& value);
@@ -401,6 +459,8 @@ namespace mqtt
             bool status = true;
             luple_do(luple, [&status, &s](auto& value){
                 status = status && detail::write(s, value);
+                if(!status)
+                    ulog::severe(ulog::join("Cannot write ", typeid(value).name()));
             });
 
             return status;
@@ -431,7 +491,9 @@ namespace mqtt
 
         bool read(Socket& s)
         {
+            
             if(!Serializer<FixedHeader>::read(s, fixed_header)) return false;
+            
             if(!Serializer<VariableHeader<Type>>::read(s, variable_header, &fixed_header)) return false;
             if(!Payload<Type>::read(s, payload, fixed_header, variable_header)) return false;
             return true;
@@ -446,8 +508,11 @@ namespace mqtt
 
         bool write(Socket& s)
         {
+            ulog::info("Sending FHdr");   
             if(!Serializer<FixedHeader>::write(s, fixed_header)) return false;
+            ulog::info("Sending VHdr");
             if(!Serializer<VariableHeader<Type>>::write(s, variable_header)) return false;
+            ulog::info("Sending Payload");
             if(!Serializer<Payload<Type>>::write(s, payload)) return false;
             return true;
         }

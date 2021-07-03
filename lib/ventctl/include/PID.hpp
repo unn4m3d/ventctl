@@ -1,31 +1,23 @@
+#include <Unit.hpp>
+
 namespace ventctl
 {
-    template<typename TValue = float, typename TC = float>
-    class PIDController
+    template<typename TC = float, TKB = float>
+    class PIDController : public UnitBase
     {
     public:
-        PIDController(TC kp, TC ki, TC kd) :
-            m_k_p(kp),
-            m_k_i(ki),
-            m_k_d(kd),
-            m_k_b(TC(0)),
-            m_saturate(false),
-            m_last_time(0),
-            m_error(0),
-            m_integral(0)
-            {}
+        using TValue = float;
         
-        PIDController(TC kp, TC ki, TC kd, TValue l, TValue h, TC kb = 0) :
+        PIDController(UnitBase& input, TC kp, TC ki, TC kd, TValue l, TValue h, TKB kb) :
+            m_input(input),
             m_k_p(kp),
             m_k_i(ki),
             m_k_d(kd),
             m_k_b(kb),
-            m_last_time(0),
-            m_error(0),
-            m_saturate(true),
-            m_high(h),
             m_low(l),
-            m_integral(0)
+            m_high(h),
+            m_integral(0),
+            m_saturate(kb > 0)
             {}
 
         void setCoefficients(TC p, TC i, TC d)
@@ -34,14 +26,11 @@ namespace ventctl
             m_k_d = d;
             m_k_i = i;
         }
-
-        void setLastTime(float t)
-        {
-            m_last_time = t;
-        }
         
-        TValue nextValue(TValue error, float currentTime)
+        TValue getValueUncached(float time)
         {
+            auto error = m_input.getValue(time);
+            auto m_last_time = getLastTime();
             auto raw_output = m_k_p * error;
             if(m_k_i != 0)
             {
@@ -83,9 +72,10 @@ namespace ventctl
         }
 
     private:
-        TC m_k_p, m_k_i, m_k_d, m_k_b;
-        TValue m_low, m_high, m_error, m_integral;
-        float m_last_time;
+        UnitBase& m_input;
+        TC m_k_p, m_k_i, m_k_d;
+        TKB m_k_b;
+        TValue m_low, m_high, m_integral;
         bool m_saturate;
     };
 }
