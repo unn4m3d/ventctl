@@ -347,10 +347,10 @@ int main()
 
     if(!result)
     {
-
+        // TODO : Data from sensors
 
         const char* topic = "d2p/sensor_reading/d/test_0/r/T0"; 
-        ulog::string_t payload = ulog::join("{ \"utc\" : ", ::time(nullptr), ", \"data\":\"228.0\"}");
+        ulog::string_t payload = ulog::join("{ \"utc\" : ", ::time(nullptr), ", \"data\":\"28.0\"}");
         MQTT::Message msg {
             .qos = MQTT::QOS1,
             .retained = false,
