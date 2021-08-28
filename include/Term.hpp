@@ -130,7 +130,7 @@ namespace ventctl
                 if(result)
                     printf("OK!\n");
                 else
-                    printf("Fuck\n");
+                    printf("Oops!\n");
             }
             else if(match_cmd(view, "ps"))
             {
@@ -142,7 +142,7 @@ namespace ventctl
                 if(result == 0)
                     printf("OK\n");
                 else
-                    printf("Fuck %d\n", (int)result);
+                    printf("Oops! %d\n", (int)result);
             }
             else
             {
