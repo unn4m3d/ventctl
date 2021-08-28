@@ -1,6 +1,8 @@
 ventctl
 ==
 
+:warning: Проект не завершен
+
 При развертывании проекта с гитхаба после установки mbed необходимо поправить `framework-mbed/features/netsocket/emac-drivers/TARGET_STM/stm32xx_emac.cpp`, заменить на строчке 46:
 
 ```cpp
